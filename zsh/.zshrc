@@ -3,19 +3,19 @@
 
 # ===== Aliases =====
 alias cl='claude'
-alias claude-vpn='HTTPS_PROXY=$AMNEZIA_PROXY HTTP_PROXY=$AMNEZIA_PROXY claude'
+alias claude-vpn='HTTPS_PROXY=$VPN_PROXY HTTP_PROXY=$VPN_PROXY claude'
 alias clv='claude-vpn'
 alias claude-desktop-vpn='~/bin/claude-desktop-vpn'
 alias cldv='claude-desktop-vpn'
 
 # ===== Proxy switchers (IP values come from ~/.zshrc.local) =====
 proxy-home() {
-  export AMNEZIA_PROXY="${PROXY_HOME_URL:?PROXY_HOME_URL not set in ~/.zshrc.local}"
-  echo "set: $AMNEZIA_PROXY"
+  export VPN_PROXY="${PROXY_HOME_URL:?PROXY_HOME_URL not set in ~/.zshrc.local}"
+  echo "set: $VPN_PROXY"
 }
 proxy-iphone() {
-  export AMNEZIA_PROXY="${PROXY_IPHONE_URL:?PROXY_IPHONE_URL not set in ~/.zshrc.local}"
-  echo "set: $AMNEZIA_PROXY"
+  export VPN_PROXY="${PROXY_IPHONE_URL:?PROXY_IPHONE_URL not set in ~/.zshrc.local}"
+  echo "set: $VPN_PROXY"
 }
 
 _proxy_geo() {
@@ -31,13 +31,13 @@ _proxy_geo() {
 
 proxy-check() {
   emulate -L zsh
-  local proxy="$AMNEZIA_PROXY"
+  local proxy="$VPN_PROXY"
   local hostport="${proxy#http://}"; hostport="${hostport##*@}"
   local host="${hostport%%:*}"
   local port="${hostport##*:}"
   echo "Proxy: $proxy"
   if [[ -z "$host" || -z "$port" ]]; then
-    echo "  AMNEZIA_PROXY не задана корректно"; return 1
+    echo "  VPN_PROXY не задана корректно"; return 1
   fi
 
   local t0 t1 ping_out ping_avg port_ok direct_ip direct_geo via_ip via_geo via_code

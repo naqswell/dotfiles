@@ -1,15 +1,26 @@
 # ~/.zshrc.local — copy this file to ~/.zshrc.local and fill in real values.
 # It is sourced from ~/.zshrc and MUST NOT be committed.
+#
+# Recommended: chmod 600 ~/.zshrc.local
 
 # ===== MTS Artifactory (corporate Maven) =====
+# Option A — plain text (simple, but credentials sit on disk in $HOME):
 # export ARTIFACTORY_USER='your_user'
 # export ARTIFACTORY_PASS='your_pass_or_token'
+#
+# Option B — macOS Keychain (recommended; encrypted at rest, unlocks with login):
+# 1) Store once:
+#    security add-generic-password -a "$USER" -s ARTIFACTORY_USER -w 'your_user'
+#    security add-generic-password -a "$USER" -s ARTIFACTORY_PASS -w 'your_pass_or_token'
+# 2) Then in this file:
+# export ARTIFACTORY_USER="$(security find-generic-password -a "$USER" -s ARTIFACTORY_USER -w 2>/dev/null)"
+# export ARTIFACTORY_PASS="$(security find-generic-password -a "$USER" -s ARTIFACTORY_PASS -w 2>/dev/null)"
 
-# ===== Amnezia proxy endpoints =====
-# Home Wi-Fi (Android with Every Proxy on the LAN)
+# ===== HTTP proxy endpoints (any VPN provider works) =====
+# Home Wi-Fi (e.g. Android with Every Proxy + AmneziaVPN on the LAN)
 # export PROXY_HOME_URL='http://192.168.1.X:8080'
 # iPhone Personal Hotspot (Apple's CGNAT range, stable across phones)
 # export PROXY_IPHONE_URL='http://172.20.10.7:8080'
 
 # Default proxy for new shells on this machine
-# export AMNEZIA_PROXY="$PROXY_HOME_URL"
+# export VPN_PROXY="$PROXY_HOME_URL"
