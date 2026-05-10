@@ -12,6 +12,54 @@ Personal macOS dotfiles managed with [GNU Stow](https://www.gnu.org/software/sto
 | `codex`  | `~/.codex/rules/default.rules`                       |
 | `nvim`   | `~/.config/nvim/`                                    |
 
+### How Stow lays this out
+
+The "real" files live in `~/dotfiles/<package>/<path>`. Stow creates symlinks
+at the equivalent path inside `~`, so the home dir looks normal but every
+managed file is actually pointing into the git repo:
+
+```
+~/  (your $HOME)                                ~/dotfiles/  (this repo, in git)
+
+  .zshrc                  ──symlink──►          zsh/.zshrc
+  .zprofile               ──symlink──►          zsh/.zprofile
+  .gitconfig              ──symlink──►          git/.gitconfig
+  .config/git/
+    ├ ignore              ──symlink──►          git/.config/git/ignore
+    └ config.mts          ──symlink──►          git/.config/git/config.mts
+  .config/nvim/           ──symlink──►          nvim/.config/nvim/
+  .claude/
+    └ settings.json       ──symlink──►          claude/.claude/settings.json
+  .codex/rules/
+    └ default.rules       ──symlink──►          codex/.codex/rules/default.rules
+
+  .zshrc.local              (NOT a symlink, NOT in git — local secrets, chmod 600)
+```
+
+### How a new shell loads
+
+```
+new terminal opens
+       │
+       ▼
+zsh sources ~/.zprofile  (symlink → dotfiles/zsh/.zprofile)
+       │   ├─ brew shellenv → PATH
+       │   └─ ANDROID_HOME, platform-tools
+       │
+       ▼
+zsh sources ~/.zshrc  (symlink → dotfiles/zsh/.zshrc)
+       │
+       ├─► line 1:  source ~/.zshrc.local           (per-machine layer)
+       │             ├─ PROXY_HOME_URL, PROXY_IPHONE_URL, VPN_PROXY
+       │             └─ ARTIFACTORY_USER/PASS  via  `security find-...`  ◄── Keychain
+       │
+       └─► rest:    aliases, functions, prompt, ZLE bindings,
+                    plugins, JAVA_HOME, NO_PROXY, JetBrains, Docker
+       │
+       ▼
+shell ready — env vars and functions in place
+```
+
 ## What's NOT tracked
 
 Kept local only — never committed:
@@ -136,6 +184,16 @@ cd ~/!!MTS && git config user.email          # corporate email
 # in ~/.gitconfig
 [includeIf "gitdir:~/!!MTS/"]
     path = ~/.config/git/config.mts
+```
+
+```
+You run a git command in...
+       │
+       ├── ~/anywhere outside ~/!!MTS         ──►  user.name  = naqswell
+       │                                           user.email = naqswell@gmail.com
+       │
+       └── ~/!!MTS/<any subproject>           ──►  user.name  = IvanovNA
+                                                   user.email = ivanovna@mtsbank.ru
 ```
 
 ## Editing files
