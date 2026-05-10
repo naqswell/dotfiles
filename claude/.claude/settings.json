@@ -1,5 +1,4 @@
 {
   "theme": "dark-daltonized",
-  "agentPushNotifEnabled": true,
-  "model": "opus"
+  "agentPushNotifEnabled": true
 }
