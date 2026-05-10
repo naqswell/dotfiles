@@ -28,3 +28,9 @@
 # === MTS workspace: override identity inside ~/!!MTS/ ===
 [includeIf "gitdir:~/!!MTS/"]
 	path = ~/.config/git/config.mts
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
