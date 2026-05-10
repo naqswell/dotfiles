@@ -1,0 +1,25 @@
+# Global gitignore — applies to every repo via core.excludesFile.
+
+# Claude Code local permissions (per-project, never commit)
+**/.claude/settings.local.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# Logs / OS noise
+*.log
+
+# Direnv / env files
+.envrc
+.env.local

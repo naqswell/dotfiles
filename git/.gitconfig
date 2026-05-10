@@ -1,0 +1,30 @@
+[user]
+	name = naqswell
+	email = naqswell@gmail.com
+
+[core]
+	autocrlf = input
+	excludesFile = ~/.config/git/ignore
+
+[init]
+	defaultBranch = main
+
+[pull]
+	rebase = false
+
+[push]
+	default = current
+	autoSetupRemote = true
+
+[fetch]
+	prune = true
+
+[diff]
+	colorMoved = default
+
+[rerere]
+	enabled = true
+
+# === MTS workspace: override identity inside ~/!!MTS/ ===
+[includeIf "gitdir:~/!!MTS/"]
+	path = ~/.config/git/config.mts

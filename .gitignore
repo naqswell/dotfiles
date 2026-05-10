@@ -1,0 +1,9 @@
+# Local secrets / per-machine overrides — sourced from .zshrc but never committed.
+*.local
+*.secret
+.env
+.envrc
+
+# macOS
+.DS_Store
+._*
