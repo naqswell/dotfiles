@@ -13,6 +13,10 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 - `$ANDROID_HOME/emulator` in PATH — `emulator` command available in terminal
 - Bootstrap step 8 in README: mise + Java 21 setup and per-project version switching
 
+- `claude/.claude/settings.json`: `permissions.deny` blocking writes to `cacerts*`, `*.jks`, `local.properties`, `gradle/init.d/**` and bash `git push` / `glab mr create` / `gh pr create` — enforces MTS workspace rules previously documented only in `!!MTS/AGENTS.md`
+- `claude/.claude/settings.json`: hooks scoped to `~/!!MTS/` workspace via `${PWD#…}` guard — `SessionStart` prints pwd + git branch; `PreToolUse` denies bare `./gradlew` from `!!MTS/platsdk` (no worktree picked); `PostToolUse` prints a detekt reminder after editing `*.kt`
+- `.gitignore`: ignore `*.bak`, `*.orig`, `*.swp` (editor scratch backups)
+
 ### Changed
 - `JAVA_HOME`: was Microsoft JDK 17 (manual), now Temurin 21 managed by mise
 - `claude/settings.json`: removed hardcoded `"model": "opus"` — inherits from CLI default

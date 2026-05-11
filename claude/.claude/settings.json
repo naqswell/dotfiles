@@ -1,4 +1,59 @@
 {
   "theme": "dark-daltonized",
-  "agentPushNotifEnabled": true
+  "agentPushNotifEnabled": true,
+  "model": "opus",
+
+  "permissions": {
+    "deny": [
+      "Edit(**/cacerts*)",
+      "Write(**/cacerts*)",
+      "Edit(**/*.jks)",
+      "Write(**/*.jks)",
+      "Edit(**/local.properties)",
+      "Write(**/local.properties)",
+      "Edit(**/gradle/init.d/**)",
+      "Write(**/gradle/init.d/**)",
+      "Bash(git push*)",
+      "Bash(glab mr create*)",
+      "Bash(gh pr create*)"
+    ]
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${PWD#/Users/nqs/!!MTS}\" != \"$PWD\" ] && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; true"
+          }
+        ]
+      }
+    ],
+
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(./gradlew*)",
+            "command": "[ \"$PWD\" = \"/Users/nqs/!!MTS/platsdk\" ] && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Не запускай ./gradlew из голого platsdk/ — укажи worktree (master/develop/release/wip1/wip2).\"}}\\n'; true"
+          }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty'); [ -n \"$f\" ] && [ \"${f#/Users/nqs/!!MTS/}\" != \"$f\" ] && [ \"${f%.kt}\" != \"$f\" ] && echo \"[detekt напомнить]: перед коммитом — ./gradlew detekt (файл: $f)\"; true"
+          }
+        ]
+      }
+    ]
+  }
 }

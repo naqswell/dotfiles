@@ -7,3 +7,8 @@
 # macOS
 .DS_Store
 ._*
+
+# Editor / scratch backups
+*.bak
+*.orig
+*.swp

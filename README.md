@@ -8,7 +8,7 @@ Personal macOS dotfiles managed with [GNU Stow](https://www.gnu.org/software/sto
 |----------|------------------------------------------------------|
 | `zsh`    | `~/.zshrc`, `~/.zprofile`                            |
 | `git`    | `~/.gitconfig`, `~/.config/git/{ignore,config.mts}`  |
-| `claude` | `~/.claude/settings.json`                            |
+| `claude` | `~/.claude/settings.json` (theme, model, MTS guardrails) |
 | `codex`  | `~/.codex/rules/default.rules`                       |
 | `nvim`   | `~/.config/nvim/`                                    |
 
