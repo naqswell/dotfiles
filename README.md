@@ -44,7 +44,9 @@ new terminal opens
        ▼
 zsh sources ~/.zprofile  (symlink → dotfiles/zsh/.zprofile)
        │   ├─ brew shellenv → PATH
-       │   └─ ANDROID_HOME, platform-tools
+       │   ├─ mise activate zsh --shims → shims in PATH
+       │   ├─ ANDROID_HOME, platform-tools, cmdline-tools, emulator
+       │   └─ JAVA_HOME → mise-managed Temurin 21
        │
        ▼
 zsh sources ~/.zshrc  (symlink → dotfiles/zsh/.zshrc)
@@ -147,11 +149,28 @@ stow zsh git claude codex nvim
 
 This creates symlinks from `~/...` into `~/dotfiles/<package>/...`.
 
-### 8. Open a new terminal
+### 8. mise + Java 21
+
+```bash
+brew install mise
+mise install java@temurin-21
+mise use --global java@temurin-21
+```
+
+`~/.zprofile` already activates mise via `--shims` and sets `JAVA_HOME` — no extra steps needed.
+
+To switch Java version per-project:
+
+```bash
+cd ~/my-project
+mise use java@temurin-17   # writes .mise.toml, auto-activates in this dir
+```
+
+### 9. Open a new terminal
 
 A new shell reads the linked `~/.zshrc`, sources `~/.zshrc.local`, sets `JAVA_HOME`, `ANDROID_HOME`, `VPN_PROXY`, etc.
 
-### 9. (Optional) Sibling repos
+### 10. (Optional) Sibling repos
 
 Two related private repos work together with this dotfiles setup:
 
@@ -164,7 +183,7 @@ git clone https://github.com/naqswell/claude-via-proxy.git ~/Documents/claude-vi
 ~/Documents/claude-via-proxy/install.sh --home-ip <phone-ip> --port 8080   # only if needed
 ```
 
-### 10. Verify
+### 11. Verify
 
 Quick smoke test in a fresh terminal:
 
@@ -174,6 +193,8 @@ security find-generic-password -a "$USER" -s ARTIFACTORY_USER -w   # should prin
 ls -la ~/.zshrc                              # should be a symlink → dotfiles/zsh/.zshrc
 cd ~ && git config user.email                # personal email
 cd ~/!!MTS && git config user.email          # corporate email
+java -version                                # should print openjdk 21
+which sdkmanager emulator                    # should resolve to $ANDROID_HOME/...
 ```
 
 ## Identity switching
