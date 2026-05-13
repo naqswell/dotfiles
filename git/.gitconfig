@@ -25,8 +25,12 @@
 [rerere]
 	enabled = true
 
-# === MTS workspace: override identity inside ~/!!MTS/ ===
-[includeIf "gitdir:~/!!MTS/"]
+# === MTS workspace: override identity by remote URL (path-independent) ===
+# Срабатывает для любого репо с remote на gitlab.services.mts.ru,
+# независимо от того, где он лежит на диске. Не зависит от имени папки.
+[includeIf "hasconfig:remote.*.url:https://gitlab.services.mts.ru/**"]
+	path = ~/.config/git/config.mts
+[includeIf "hasconfig:remote.*.url:git@gitlab.services.mts.ru:**"]
 	path = ~/.config/git/config.mts
 [credential "https://github.com"]
 	helper = 

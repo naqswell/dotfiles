@@ -30,15 +30,18 @@
       "Bash(gh pr create*)"
     ]
   },
+  "env": {
+    "MTS_WORKSPACE": "/Users/nqs/!!MTS"
+  },
   "model": "opus",
   "hooks": {
     "SessionStart": [
       {
-        "_comment": "Печатает pwd + текущую git-ветку при старте сессии — только если cwd внутри ~/!!MTS (корпоративные репо МТС). Помогает не перепутать worktree (там их несколько на проект).",
+        "_comment": "Печатает pwd + текущую git-ветку при старте сессии — только если cwd внутри $MTS_WORKSPACE (корпоративные репо МТС). Помогает не перепутать worktree. $MTS_WORKSPACE объявлен в env-блоке выше — единая точка правды для пути.",
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"${PWD#/Users/nqs/!!MTS}\" != \"$PWD\" ] && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; true"
+            "command": "[ -n \"$MTS_WORKSPACE\" ] && [ \"${PWD#$MTS_WORKSPACE}\" != \"$PWD\" ] && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; true"
           }
         ]
       }
@@ -50,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"$PWD\" = \"/Users/nqs/!!MTS/platsdk\" ] && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Не запускай ./gradlew из голого platsdk/ — укажи worktree (master/develop/release/wip1/wip2).\"}}\\n'; true",
+            "command": "[ -n \"$MTS_WORKSPACE\" ] && [ \"$PWD\" = \"$MTS_WORKSPACE/platsdk\" ] && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Не запускай ./gradlew из голого platsdk/ — укажи worktree (master/develop/release/wip1/wip2).\"}}\\n'; true",
             "if": "Bash(./gradlew*)"
           }
         ]
@@ -70,11 +73,11 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "_comment": "После редактирования .kt в ~/!!MTS напоминает прогнать detekt перед коммитом — иначе CI упадёт.",
+        "_comment": "После редактирования .kt внутри $MTS_WORKSPACE напоминает прогнать detekt перед коммитом — иначе CI упадёт.",
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty'); [ -n \"$f\" ] && [ \"${f#/Users/nqs/!!MTS/}\" != \"$f\" ] && [ \"${f%.kt}\" != \"$f\" ] && echo \"[detekt напомнить]: перед коммитом — ./gradlew detekt (файл: $f)\"; true"
+            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty'); [ -n \"$f\" ] && [ -n \"$MTS_WORKSPACE\" ] && [ \"${f#$MTS_WORKSPACE/}\" != \"$f\" ] && [ \"${f%.kt}\" != \"$f\" ] && echo \"[detekt напомнить]: перед коммитом — ./gradlew detekt (файл: $f)\"; true"
           }
         ]
       }
