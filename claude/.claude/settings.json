@@ -1,9 +1,21 @@
 {
-  "theme": "dark-daltonized",
-  "agentPushNotifEnabled": true,
-  "model": "opus",
-
   "permissions": {
+    "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt.",
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(file:*)",
+      "Bash(pwd)",
+      "Bash(echo:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(which:*)"
+    ],
+    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — должны делаться руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС, никогда не редактировать.",
     "deny": [
       "Edit(**/cacerts*)",
       "Write(**/cacerts*)",
@@ -18,10 +30,11 @@
       "Bash(gh pr create*)"
     ]
   },
-
+  "model": "opus",
   "hooks": {
     "SessionStart": [
       {
+        "_comment": "Печатает pwd + текущую git-ветку при старте сессии — только если cwd внутри ~/!!MTS (корпоративные репо МТС). Помогает не перепутать worktree (там их несколько на проект).",
         "hooks": [
           {
             "type": "command",
@@ -30,23 +43,34 @@
         ]
       }
     ],
-
     "PreToolUse": [
       {
         "matcher": "Bash",
+        "_comment": "Блокирует ./gradlew из корня platsdk/. Корень — не worktree (там только .git-метаданные и подпапки master/develop/release/wip1/wip2), сборка оттуда либо упадёт, либо соберёт случайный worktree. Заставляем явно cd в нужный worktree.",
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(./gradlew*)",
-            "command": "[ \"$PWD\" = \"/Users/nqs/!!MTS/platsdk\" ] && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Не запускай ./gradlew из голого platsdk/ — укажи worktree (master/develop/release/wip1/wip2).\"}}\\n'; true"
+            "command": "[ \"$PWD\" = \"/Users/nqs/!!MTS/platsdk\" ] && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Не запускай ./gradlew из голого platsdk/ — укажи worktree (master/develop/release/wip1/wip2).\"}}\\n'; true",
+            "if": "Bash(./gradlew*)"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "_comment": "Auto-allow для .kt/.kts если файл в git work-tree. Логика: git даёт страховку на откат (git checkout), без git одна ошибка Claude — потеря работы. Условие на git-репо отсекает /tmp, домашнюю папку и прочие места без version control.",
+        "hooks": [
+          {
+            "type": "command",
+            "_comment": "1) jq достаёт file_path из tool_input. 2) case фильтрует по расширению — не .kt/.kts → выходим тихо, prompt пройдёт штатно. 3) git -C dirname проверяет, что директория файла внутри work-tree (поддерживает worktrees и submodules). 4) printf отдаёт JSON с permissionDecision=allow. 5) trailing 'true' — чтобы exit-code был 0 даже если git вернул не-ноль (иначе Claude посчитает хук упавшим).",
+            "command": "file=$(jq -r '.tool_input.file_path // empty'); case \"$file\" in *.kt|*.kts) ;; *) exit 0 ;; esac; git -C \"$(dirname \"$file\")\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\".kt/.kts в git-репо — auto-allow\"}}\\n'; true"
           }
         ]
       }
     ],
-
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
+        "_comment": "После редактирования .kt в ~/!!MTS напоминает прогнать detekt перед коммитом — иначе CI упадёт.",
         "hooks": [
           {
             "type": "command",
@@ -55,5 +79,8 @@
         ]
       }
     ]
-  }
+  },
+  "enabledPlugins": {},
+  "theme": "dark-daltonized",
+  "agentPushNotifEnabled": true
 }
