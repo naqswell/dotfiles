@@ -3,10 +3,49 @@
 
 # ===== Aliases =====
 alias cl='claude'
-alias claude-vpn='HTTPS_PROXY=$VPN_PROXY HTTP_PROXY=$VPN_PROXY claude'
-alias clv='claude-vpn'
-alias claude-desktop-vpn='~/bin/claude-desktop-vpn'
-alias cldv='claude-desktop-vpn'
+
+# ===== Subcommand wrappers: "<tool> vpn" запускает через VPN_PROXY, без vpn — обычно =====
+claude() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    shift
+    HTTPS_PROXY="$VPN_PROXY" HTTP_PROXY="$VPN_PROXY" command claude "$@"
+  else
+    command claude "$@"
+  fi
+}
+
+codex() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    shift
+    HTTPS_PROXY="$VPN_PROXY" HTTP_PROXY="$VPN_PROXY" command codex "$@"
+  else
+    command codex "$@"
+  fi
+}
+
+claudedesk() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    ~/bin/claude-desktop-vpn
+  else
+    open -na "/Applications/Claude.app"
+  fi
+}
+
+codexdesk() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    ~/.local/bin/codex-desktop-vpn
+  else
+    open -na "/Applications/Codex.app"
+  fi
+}
+
+chatgpt() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    ~/.local/bin/chatgpt-desktop-vpn
+  else
+    open -na "/Applications/ChatGPT.app"
+  fi
+}
 
 # ===== Proxy switchers (IP values come from ~/.zshrc.local) =====
 proxy-home() {
@@ -154,7 +193,7 @@ export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
 
 # ===== MTS GitLab — bypass Amnezia proxy =====
 export GITLAB_HOST=gitlab.services.mts.ru
-export NO_PROXY="gitlab.services.mts.ru,.mts.ru,localhost,127.0.0.1,11.0.0.0/8"
+export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,localhost,127.0.0.1,11.0.0.0/8"
 export no_proxy="$NO_PROXY"
 
 # ===== JetBrains VM options (managed by Toolbox) =====

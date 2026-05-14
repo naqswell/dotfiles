@@ -4,6 +4,18 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [2026-05-14]
+
+### Added
+- `zsh/.zshrc`: subcommand-pattern wrappers `claude vpn / codex vpn / claudedesk vpn / codexdesk vpn / chatgpt vpn` — запуск CLI/GUI через `$VPN_PROXY`, без подкоманды `vpn` — обычный запуск
+- `zsh/.zshrc`: `.mtsbank.ru` в `NO_PROXY` (CLI к банковским доменам обходит VPN-прокси, идёт через Citrix)
+
+### Removed
+- `zsh/.zshrc`: алиасы `claude-vpn`, `clv`, `claude-desktop-vpn`, `cldv` — заменены на subcommand-функции
+
+### Changed
+- `claude/.claude/settings.json`: cosmetic JSON cleanup (Claude Code нормализовал порядок ключей, удалил недопустимые JSON-комментарии `_commentAllow` / `_commentDeny`)
+
 ## [2026-05-11]
 
 ### Added
