@@ -39,13 +39,9 @@ codexdesk() {
   fi
 }
 
-chatgpt() {
-  if [[ "${1:-}" == "vpn" ]]; then
-    ~/.local/bin/chatgpt-desktop-vpn
-  else
-    open -na "/Applications/ChatGPT.app"
-  fi
-}
+# ChatGPT.app — native Swift app, использует URLSession и игнорирует
+# --proxy-server / HTTPS_PROXY. Для proxying нужен системный прокси
+# macOS либо веб-версия через Zen. Wrapper-функция была удалена.
 
 # ===== Proxy switchers (IP values come from ~/.zshrc.local) =====
 proxy-home() {

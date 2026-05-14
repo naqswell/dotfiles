@@ -12,6 +12,7 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 
 ### Removed
 - `zsh/.zshrc`: алиасы `claude-vpn`, `clv`, `claude-desktop-vpn`, `cldv` — заменены на subcommand-функции
+- `zsh/.zshrc`: wrapper-функция `chatgpt vpn` — ChatGPT.app (native Swift, URLSession) игнорирует `HTTPS_PROXY` / `--proxy-server`. Для проксирования нужен системный прокси macOS или веб-версия через Zen-браузер
 
 ### Changed
 - `claude/.claude/settings.json`: cosmetic JSON cleanup (Claude Code нормализовал порядок ключей, удалил недопустимые JSON-комментарии `_commentAllow` / `_commentDeny`)
