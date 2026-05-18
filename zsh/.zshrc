@@ -187,9 +187,11 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 export WORKDIR="$ANDROID_HOME"
 export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
 
-# ===== MTS GitLab — bypass Amnezia proxy =====
+# ===== Proxy bypass — corp domains + private nets никогда не идут в xray =====
+# Расширено для defense-in-depth: даже если CLI-тулза уважает HTTPS_PROXY,
+# она НЕ отправит корп-хост в EU-экзит. См. xray routing rules как второй слой.
 export GITLAB_HOST=gitlab.services.mts.ru
-export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,localhost,127.0.0.1,11.0.0.0/8"
+export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,.mtsbnk.ru,.mtsdigital.ru,localhost,127.0.0.1,10.0.0.0/8,11.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,.corp,.intranet,.internal,.lan,.local"
 export no_proxy="$NO_PROXY"
 
 # ===== JetBrains VM options (managed by Toolbox) =====
