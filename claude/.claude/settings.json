@@ -15,7 +15,15 @@
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
-      "Bash(which:*)"
+      "Bash(which:*)",
+      "Bash(launchctl print:*)",
+      "Bash(launchctl list)",
+      "Bash(launchctl list:*)",
+      "Bash(claude plugin:*)",
+      "Bash(claude plugins list)",
+      "Bash(claude mcp list)",
+      "Bash(defaults read:*)",
+      "Bash(bun --version)"
     ],
     "deny": [
       "Edit(**/cacerts*)",
@@ -77,7 +85,10 @@
       }
     ]
   },
-  "enabledPlugins": {},
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true
+  },
   "theme": "dark-daltonized",
-  "agentPushNotifEnabled": true
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true
 }

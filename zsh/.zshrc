@@ -23,6 +23,15 @@ codex() {
   fi
 }
 
+builder() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    shift
+    HTTPS_PROXY="$VPN_PROXY" HTTP_PROXY="$VPN_PROXY" command builder "$@"
+  else
+    command builder "$@"
+  fi
+}
+
 claudedesk() {
   if [[ "${1:-}" == "vpn" ]]; then
     ~/bin/claude-desktop-vpn
@@ -36,6 +45,14 @@ codexdesk() {
     ~/.local/bin/codex-desktop-vpn
   else
     open -na "/Applications/Codex.app"
+  fi
+}
+
+notion() {
+  if [[ "${1:-}" == "vpn" ]]; then
+    ~/.local/bin/notion-desktop-vpn
+  else
+    open -na "/Applications/Notion.app"
   fi
 }
 
@@ -185,7 +202,8 @@ export PATH="$PATH:$HOME/go/bin"
 # ===== Android SDK =====
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export WORKDIR="$ANDROID_HOME"
-export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+# JAVA_HOME задаётся в .zprofile из mise (temurin-21). Раньше тут был
+# override на java_home -v 17 — убран, источник правды один: mise.
 
 # ===== Proxy bypass — corp domains + private nets никогда не идут в xray =====
 # Расширено для defense-in-depth: даже если CLI-тулза уважает HTTPS_PROXY,
