@@ -22,4 +22,19 @@
 
 # Direnv / env files
 .envrc
+.env
 .env.local
+
+# Secrets — никогда не коммитить (defense-in-depth поверх per-repo .gitignore)
+.zshrc.local
+*.secret
+*_token
+id_ed25519
+id_ed25519.*
+id_rsa
+id_rsa.*
+*.pem
+*.jks
+auth.json
+# *.key — при ложных срабатываниях добавлять нужный файл через `git add -f`
+*.key
