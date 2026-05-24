@@ -1,7 +1,4 @@
 {
-  "env": {
-    "MTS_WORKSPACE": "/Users/nqs/!!MTS"
-  },
   "permissions": {
     "allow": [
       "Bash(cd:*)",
