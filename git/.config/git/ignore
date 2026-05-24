@@ -35,6 +35,10 @@ id_rsa
 id_rsa.*
 *.pem
 *.jks
+*.p12
+*.pfx
+*.cer
+*.p7b
 auth.json
 # *.key — при ложных срабатываниях добавлять нужный файл через `git add -f`
 *.key
