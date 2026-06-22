@@ -41,6 +41,7 @@
     "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt.",
     "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — должны делаться руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС, никогда не редактировать."
   },
+  "model": "opus[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -86,8 +87,12 @@
     ]
   },
   "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true
+    "gopls-lsp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true
   },
+  "effortLevel": "high",
+  "tui": "fullscreen",
+  "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true
