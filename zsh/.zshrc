@@ -206,11 +206,15 @@ export WORKDIR="$ANDROID_HOME"
 # override на java_home -v 17 — убран, источник правды один: mise.
 
 # ===== Proxy bypass — corp domains + private nets никогда не идут в xray =====
-# Расширено для defense-in-depth: даже если CLI-тулза уважает HTTPS_PROXY,
-# она НЕ отправит корп-хост в EU-экзит. См. xray routing rules как второй слой.
-export GITLAB_HOST=gitlab.services.mts.ru
-export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,.mtsbnk.ru,.mtsdigital.ru,localhost,127.0.0.1,10.0.0.0/8,11.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,.corp,.intranet,.internal,.lan,.local"
-export no_proxy="$NO_PROXY"
+# ТОЛЬКО на mini (RU-узел, $USER=nqs-desktop). На макбуке (заграница) корп-работы
+# нет вообще — корп-байты не должны исходить с не-РФ IP (R9/F6), поэтому корп-хуки
+# тут не задаются. Defense-in-depth: даже если CLI уважает HTTPS_PROXY, корп-хост
+# не уйдёт в EU-экзит. См. components/claude-on-mini.md, xray routing — второй слой.
+if [[ "$USER" == "nqs-desktop" ]]; then
+  export GITLAB_HOST=gitlab.services.mts.ru
+  export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,.mtsbnk.ru,.mtsdigital.ru,localhost,127.0.0.1,10.0.0.0/8,11.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,.corp,.intranet,.internal,.lan,.local"
+  export no_proxy="$NO_PROXY"
+fi
 
 # ===== JetBrains VM options (managed by Toolbox) =====
 [ -f "$HOME/.jetbrains.vmoptions.sh" ] && source "$HOME/.jetbrains.vmoptions.sh"
