@@ -1,5 +1,5 @@
 ---
-description: Выпуск новой версии platsdk — back-merge, релизная ветка, бамп, CHANGELOG, сборка, тег, публикация
+description: Выпуск новой версии platsdk — релизная ветка, бамп, CHANGELOG, сборка, тег, публикация, back-merge в develop
 argument-hint: <patch|minor|major|X.Y.Z> [TICKET|jira-url] [--publish=local|remote|none]
 allowed-tools: Bash(git*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion
 ---
@@ -42,10 +42,12 @@ allowed-tools: Bash(git*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion
 
 ## Шаги
 
-### 1. Актуализировать develop и вернуть в него прошлый релиз
+### 1. Актуализировать develop и проверить, что прошлый релиз в нём
 
-Обратный мердж релизной ветки в develop делают вручную и **регулярно забывают**
-(8.0.4 так и не был влит до 2026-07-09). Всегда проверяй.
+Релиз возвращается в develop на **шаге 10 этой же команды**. Но если прошлый
+релиз выпускали не через неё, back-merge мог быть забыт — так было с 8.0.4,
+она пролежала невлитой девять дней, и develop всё это время считал текущей
+версией 8.0.3. Поэтому проверяй, а не полагайся на то, что шаг 10 отработал.
 
 ```
 cd '/Users/nqs-desktop/mts/platsdk/develop'
@@ -58,14 +60,11 @@ git pull --ff-only
 ```
 git branch -r | grep 'origin/release/' | sort -V | tail -1
 git log --oneline <last-release>..develop    # пусто → develop содержит релиз
-git log --oneline develop..<last-release>    # непусто → нужен back-merge
+git log --oneline develop..<last-release>    # непусто → back-merge забыли
 ```
-Если нужен — покажи, какие коммиты приедут, и влей:
-```
-git merge --no-ff origin/release/<prev> -m "Merge branch 'release/<prev>' into 'develop'"
-```
-Перед мерджем убедись, что конфликта не будет: проверь, менял ли develop
-`gradle/libs.versions.toml` и `CHANGELOG.md` после merge-base.
+Если забыли — покажи пользователю, какие коммиты приедут, и влей по процедуре
+из шага 10. Это страховка, а не штатный путь: в норме здесь ничего не должно
+находиться.
 
 ### 2. Аудит того, что уходит в релиз
 
@@ -133,10 +132,11 @@ git tag -a v<version> -m "version <version>"
 Аннотированный тег, сообщение совпадает с subject коммита, висит на коммите
 бампа внутри релизной ветки. Так сделаны v8.0.4 и v8.0.5.
 
-### 8. Push — руками пользователя
+### 8. Push релизной ветки и тега — руками пользователя
 
-Порядок важен: сперва develop (в нём back-merge), потом релизная ветка с тегом.
-Выведи обе команды и **жди**:
+Если на шаге 1 сработала страховка и ты влил забытый прошлый релиз — сперва
+запушить develop, иначе этот мердж уедет на сервер впервые внутри релизной
+ветки. Если страховка не срабатывала — сразу релизная ветка.
 
 ```
 cd '/Users/nqs-desktop/mts/platsdk/develop' && git push origin develop
@@ -161,7 +161,33 @@ cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release
   ```
 - `--publish=none` — пропусти.
 
-### 10. Итог
+### 10. Вернуть релиз в develop
+
+**Не пропускай этот шаг и не откладывай его на следующий релиз.** Пока он не
+сделан, `develop` содержит старую версию в `libs.versions.toml`, а вычисление
+следующей версии по тегу расходится с тем, что видно в дереве.
+
+Делать сразу после того, как тег запушен и артефакт опубликован — релиз к этому
+моменту зафиксирован, вливать безопасно.
+
+```
+cd '/Users/nqs-desktop/mts/platsdk/develop'
+git fetch origin
+git pull --ff-only
+git log --oneline $(git merge-base develop origin/release/<version>)..develop -- gradle/libs.versions.toml CHANGELOG.md
+```
+Последняя команда должна вернуть пусто — значит develop не трогал те же файлы
+и конфликта не будет. Если непусто — покажи расхождение пользователю.
+
+```
+git merge --no-ff origin/release/<version> -m "Merge branch 'release/<version>' into 'develop'"
+```
+Затем выведи команду push и **жди**:
+```
+cd '/Users/nqs-desktop/mts/platsdk/develop' && git push origin develop
+```
+
+### 11. Итог
 
 Кратко: что влито, что вошло в релиз, где ветка и тег, что осталось сделать.
 Напомни, что `/mymts-platsdk-bump <version> [TICKET]` имеет смысл запускать

@@ -305,12 +305,16 @@ cd ~/dotfiles && stow zsh git
 
 | Command | What it does |
 |---------|--------------|
-| `/release-platsdk <patch\|minor\|major\|X.Y.Z> [TICKET] [--publish=local\|remote\|none]` | Back-merges the previous release into `develop`, cuts `release/<version>` in a fresh worktree, bumps `gradle/libs.versions.toml`, writes the CHANGELOG section from git log + Jira, runs `assembleDebug detekt`, tags `v<version>` |
+| `/release-platsdk <patch\|minor\|major\|X.Y.Z> [TICKET] [--publish=local\|remote\|none]` | Cuts `release/<version>` in a fresh worktree, bumps `gradle/libs.versions.toml`, writes the CHANGELOG section from git log + Jira, runs `assembleDebug detekt`, tags `v<version>`, publishes, then merges the release back into `develop` |
 | `/mymts-platsdk-bump <X.Y.Z> [TICKET] [--type=feature\|bugfix]` | Bumps `mts-plat-sdk` in mymts and prepares the MR. `feature` branches off `develop`, `bugfix` off the latest `release/*` — and the MR targets whichever it branched from |
 
 The next version is derived from the **latest tag**, not from the TOML on `develop`:
-the bump lives in the release branch and only returns to `develop` via back-merge,
-so the TOML there is normally one version behind.
+the bump lives in the release branch and only returns to `develop` via back-merge.
+
+That back-merge is the last step of the release, right after the tag is pushed and
+the artifact is published — not a chore deferred to the next release. Step 1 still
+verifies the previous release landed, as a safety net for releases cut by hand:
+`8.0.4` sat unmerged for nine days, and `develop` reported `8.0.3` the whole time.
 
 Both commands stop at every irreversible step — `git push`, `glab mr create`,
 `./gradlew publishRelease` — print the exact command and wait. Those same commands

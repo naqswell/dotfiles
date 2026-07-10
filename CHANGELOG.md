@@ -11,6 +11,7 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 
 ### Changed
 - `claude/.claude/settings.json`: подхвачены правки, сделанные самим Claude Code через UI — плагин `pr-review-toolkit`, `skipWorkflowUsageWarning`, `effortLevel: xhigh`
+- `claude/.claude/commands/release-platsdk.md`: back-merge релиза в `develop` перенесён из начала следующего релиза в конец текущего (шаг 10, сразу после тега и публикации). В начале осталась проверка-страховка на случай релиза, выпущенного вручную. Раньше `develop` отставал на версию до самого старта следующего релиза
 
 ## [2026-05-14]
 
