@@ -4,6 +4,14 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- `claude/.claude/commands/release-platsdk.md` — слэш-команда релиза platsdk: back-merge прошлого релиза в `develop`, релизная ветка в отдельном worktree, бамп версии, CHANGELOG из git log + Jira, `assembleDebug detekt` до тега, аннотированный тег `v<version>`, `--publish=local|remote|none`
+- `claude/.claude/commands/mymts-platsdk-bump.md` — слэш-команда бампа `mts-plat-sdk` в mymts и подготовки MR: `feature` от `develop`, `bugfix` от последней `release/*`, MR целится в ту же ветку, от которой отведён
+- `claude/.claude/settings.json`: `deny` на `glab mr merge*`, `git tag -d*`, `./gradlew publishRelease*` — необратимые действия выполняет пользователь, не агент. `publishLocal` (пишет только в `~/.m2`) сознательно разрешён
+
+### Changed
+- `claude/.claude/settings.json`: подхвачены правки, сделанные самим Claude Code через UI — плагин `pr-review-toolkit`, `skipWorkflowUsageWarning`, `effortLevel: xhigh`
+
 ## [2026-05-14]
 
 ### Added

@@ -33,10 +33,13 @@
       "Write(**/gradle/init.d/**)",
       "Bash(git push*)",
       "Bash(glab mr create*)",
-      "Bash(gh pr create*)"
+      "Bash(glab mr merge*)",
+      "Bash(gh pr create*)",
+      "Bash(git tag -d*)",
+      "Bash(./gradlew publishRelease*)"
     ],
     "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt.",
-    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — должны делаться руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС, никогда не редактировать."
+    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — должны делаться руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС, никогда не редактировать. publishRelease пишет в артифактори необратимо; publishLocal (только ~/.m2) сознательно разрешён."
   },
   "hooks": {
     "SessionStart": [
@@ -83,9 +86,12 @@
     ]
   },
   "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true
+    "gopls-lsp@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
   },
+  "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true
+  "skipAutoPermissionPrompt": true,
+  "effortLevel": "xhigh"
 }

@@ -8,7 +8,7 @@ Personal macOS dotfiles managed with [GNU Stow](https://www.gnu.org/software/sto
 |----------|------------------------------------------------------|
 | `zsh`    | `~/.zshrc`, `~/.zprofile`                            |
 | `git`    | `~/.gitconfig`, `~/.config/git/{ignore,config.mts}`  |
-| `claude` | `~/.claude/settings.json` (theme, model, MTS guardrails) |
+| `claude` | `~/.claude/settings.json` (theme, model, MTS guardrails), `~/.claude/commands/` (platsdk release slash-commands) |
 | `codex`  | `~/.codex/rules/default.rules`                       |
 | `nvim`   | `~/.config/nvim/`                                    |
 
@@ -29,7 +29,8 @@ managed file is actually pointing into the git repo:
     └ config.mts          ──symlink──►          git/.config/git/config.mts
   .config/nvim/           ──symlink──►          nvim/.config/nvim/
   .claude/
-    └ settings.json       ──symlink──►          claude/.claude/settings.json
+    ├ settings.json       ──symlink──►          claude/.claude/settings.json
+    └ commands/           ──symlink──►          claude/.claude/commands/
   .codex/rules/
     └ default.rules       ──symlink──►          codex/.codex/rules/default.rules
 
@@ -297,6 +298,25 @@ rm ~/.zshrc ~/.gitconfig
 # stow again
 cd ~/dotfiles && stow zsh git
 ```
+
+## Claude Code release commands
+
+`claude/.claude/commands/` holds two slash-commands that drive the platsdk release flow:
+
+| Command | What it does |
+|---------|--------------|
+| `/release-platsdk <patch\|minor\|major\|X.Y.Z> [TICKET] [--publish=local\|remote\|none]` | Back-merges the previous release into `develop`, cuts `release/<version>` in a fresh worktree, bumps `gradle/libs.versions.toml`, writes the CHANGELOG section from git log + Jira, runs `assembleDebug detekt`, tags `v<version>` |
+| `/mymts-platsdk-bump <X.Y.Z> [TICKET] [--type=feature\|bugfix]` | Bumps `mts-plat-sdk` in mymts and prepares the MR. `feature` branches off `develop`, `bugfix` off the latest `release/*` — and the MR targets whichever it branched from |
+
+The next version is derived from the **latest tag**, not from the TOML on `develop`:
+the bump lives in the release branch and only returns to `develop` via back-merge,
+so the TOML there is normally one version behind.
+
+Both commands stop at every irreversible step — `git push`, `glab mr create`,
+`./gradlew publishRelease` — print the exact command and wait. Those same commands
+are in `permissions.deny` in `settings.json`, so the harness refuses them even if
+the agent ignores the instruction. `publishLocal` is deliberately allowed: it only
+writes to `~/.m2`.
 
 ## Related repos
 
