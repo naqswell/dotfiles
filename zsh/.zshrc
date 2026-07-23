@@ -222,7 +222,9 @@ export WORKDIR="$ANDROID_HOME"
 #   --rport N     adb-порт эмулятора на хосте (по умолч. 5555; второй эмулятор 5557, третий 5559 …)
 #   --lport N     локальный порт (по умолч. = rport)
 #   --avd NAME    если на --rport никто не слушает — headless-старт этого AVD на хосте
-#   --show M      orca (панель Orca, по умолч.) | scrcpy (своё окно) | none (только adb connect)
+#   --show M      scrcpy (своё окно, по умолч.) | orca (панель Orca) | none (только adb connect)
+#   --orca        шорткат = --show orca (встроенная панель Orca; привязана к worktree вкладки)
+#   --scrcpy      шорткат = --show scrcpy
 #   --light       ужать источник до 540x960/240 — легче стримить (реверс: --native)
 #   --native      вернуть эмулятору родное разрешение (wm size/density reset) и выйти
 #   --fps N       scrcpy: макс. fps (по умолч. 20)
@@ -230,7 +232,7 @@ export WORKDIR="$ANDROID_HOME"
 #   --maxsize N   scrcpy: макс. сторона в px (0 = как есть)
 if [[ "$USER" != "nqs-desktop" ]]; then
   orcaemu() {
-    local host=mac-mini rport=5555 lport="" avd="" show=orca light=0 native=0
+    local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0
     local fps=20 bitrate=3M maxsize=0 extra=()
     while (( $# )); do
       case "$1" in
@@ -239,6 +241,8 @@ if [[ "$USER" != "nqs-desktop" ]]; then
         --lport)   lport=$2;   shift 2 ;;
         --avd)     avd=$2;     shift 2 ;;
         --show)    show=$2;    shift 2 ;;
+        --orca)    show=orca;   shift ;;
+        --scrcpy)  show=scrcpy; shift ;;
         --fps)     fps=$2;     shift 2 ;;
         --bitrate) bitrate=$2; shift 2 ;;
         --maxsize) maxsize=$2; shift 2 ;;
@@ -290,11 +294,15 @@ if [[ "$USER" != "nqs-desktop" ]]; then
     esac
   }
 
-  # mini-эмулятор одной командой (дефолты под Mac mini). Всё уходит в orcaemu:
-  #   miniemu                                     — показать в панели Orca
-  #   miniemu --light                             — то же, ужав источник (легче сквозь туннель)
-  #   miniemu --show scrcpy --fps 15 --bitrate 2M --maxsize 540  — своё окно, полный контроль
+  # mini-эмулятор одной командой (дефолты под Mac mini). ПО УМОЛЧАНИЮ — окно scrcpy
+  # (не зависит от worktree Orca, всегда показывает экран). Всё уходит в orcaemu:
+  #   miniemu                                     — окно scrcpy (дефолт)
+  #   miniemu --fps 15 --bitrate 2M --maxsize 540 — scrcpy с контролем нагрузки на стрим
+  #   miniemu --light                             — ужать источник (легче сквозь туннель)
+  #   miniemu --orca                              — встроенная панель Orca (привязка к worktree вкладки)
   #   miniemu --native                            — вернуть родное разрешение
+  # Правило: при каждой сборке APK поднимаем экран через `miniemu` (scrcpy) — см. память
+  # feedback_apk_build_scrcpy и components/claude-on-mini.md в remote-work-setup.
   miniemu() { orcaemu --host mac-mini --rport 5555 "$@"; }
 fi
 
