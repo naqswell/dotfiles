@@ -238,12 +238,13 @@ export PATH
 #   --scrcpy      шорткат = --show scrcpy
 #   --light       ужать источник до 540x960/240 — легче стримить (реверс: --native)
 #   --native      вернуть эмулятору родное разрешение (wm size/density reset) и выйти
+#   --cold        coldboot: погасить эмулятор на хосте и поднять заново без снапшота (нужен --avd)
 #   --fps N       scrcpy: макс. fps (по умолч. 20)
 #   --bitrate B   scrcpy: битрейт видео (по умолч. 3M)
 #   --maxsize N   scrcpy: макс. сторона в px (0 = как есть)
 if [[ "$USER" != "nqs-desktop" ]]; then
   orcaemu() {
-    local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0
+    local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0 cold=0
     local fps=20 bitrate=3M maxsize=0 extra=()
     while (( $# )); do
       case "$1" in
@@ -259,6 +260,7 @@ if [[ "$USER" != "nqs-desktop" ]]; then
         --maxsize) maxsize=$2; shift 2 ;;
         --light)   light=1;    shift ;;
         --native)  native=1;   shift ;;
+        --cold)    cold=1;     shift ;;
         --)        shift; extra=("$@"); break ;;
         *) echo "orcaemu: неизвестный аргумент: $1" >&2; return 2 ;;
       esac
@@ -267,12 +269,30 @@ if [[ "$USER" != "nqs-desktop" ]]; then
     local serial="localhost:$lport"
     local sdk='$HOME/Library/Android/sdk'   # раскрывается на удалённой стороне
 
-    # 1) туннель adb-порта (если host != "-")
+    # 1) coldboot / туннель adb-порта (если host != "-")
+    (( cold )) && [[ $host == "-" ]] && { echo "orcaemu: --cold требует удалённый --host (не '-')" >&2; return 2; }
     if [[ $host != "-" ]]; then
+      local console=$(( rport - 1 ))
+
+      # coldboot: гасим текущий эмулятор и поднимаем с чистой загрузки без снапшота.
+      # Не зависит от туннеля (он привязан к порту хоста и переживает рестарт эмулятора).
+      if (( cold )); then
+        [[ -z $avd ]] && { echo "orcaemu: --cold требует --avd" >&2; return 2; }
+        if ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
+          echo "orcaemu: coldboot — гашу emulator-$console на $host…"
+          ssh "$host" "$sdk/platform-tools/adb -s emulator-$console emu kill" </dev/null 2>/dev/null
+          ssh "$host" "for i in \$(seq 1 30); do nc -z 127.0.0.1 $rport >/dev/null 2>&1 || exit 0; sleep 1; done; exit 1" </dev/null \
+            || { echo "orcaemu: эмулятор не освободил порт $rport за 30с" >&2; return 1; }
+        fi
+        adb disconnect "$serial" >/dev/null 2>&1
+        echo "orcaemu: cold-старт AVD '$avd' на $host (console $console, без снапшота)…"
+        ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot >/tmp/emu-$console.log 2>&1 &" </dev/null
+        ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
+      fi
+
       if ! pgrep -f "L $lport:127.0.0.1:$rport" >/dev/null 2>&1; then
         # опционально стартуем AVD на хосте, если на adb-порту пусто (console = rport-1)
         if [[ -n $avd ]] && ! ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
-          local console=$(( rport - 1 ))
           echo "orcaemu: headless-старт AVD '$avd' на $host (console $console)…"
           ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot-save >/tmp/emu-$console.log 2>&1 &" </dev/null
           ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
@@ -312,9 +332,17 @@ if [[ "$USER" != "nqs-desktop" ]]; then
   #   miniemu --light                             — ужать источник (легче сквозь туннель)
   #   miniemu --orca                              — встроенная панель Orca (привязка к worktree вкладки)
   #   miniemu --native                            — вернуть родное разрешение
+  #   miniemu coldboot                            — погасить эмулятор и поднять заново без снапшота (чистая загрузка)
+  # Субкоманд `coldboot` — синоним `--cold` (позиционный, для мышечной памяти). AVD по
+  # умолчанию (small_phone_api36) зашит в дефолты, поэтому miniemu ещё и сам поднимает
+  # эмулятор, если на порту пусто.
   # Правило: при каждой сборке APK поднимаем экран через `miniemu` (scrcpy) — см. память
   # feedback_apk_build_scrcpy и components/claude-on-mini.md в remote-work-setup.
-  miniemu() { orcaemu --host mac-mini --rport 5555 "$@"; }
+  miniemu() {
+    local -a pre
+    [[ $1 == coldboot ]] && { pre=(--cold); shift; }
+    orcaemu --host mac-mini --rport 5555 --avd small_phone_api36 "${pre[@]}" "$@"
+  }
 fi
 
 # ===== Proxy bypass — corp domains + private nets никогда не идут в xray =====
