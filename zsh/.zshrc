@@ -205,12 +205,117 @@ export WORKDIR="$ANDROID_HOME"
 # JAVA_HOME задаётся в .zprofile из mise (temurin-21). Раньше тут был
 # override на java_home -v 17 — убран, источник правды один: mise.
 
+# ── Удалённые Android-эмуляторы → этот макбук ───────────────────────────────
+# orcaemu: мост «удалённый (или локальный) Android-эмулятор → этот мак». Поднимает
+# ssh-туннель adb-порта, цепляет локальный adb и показывает экран либо во встроенной
+# панели Orca (`ORCA emulator attach`), либо своим окном scrcpy. Гибко по host/порту,
+# так что несколько эмуляторов и другие машины подключаются тем же механизмом.
+# adb-ключ этого мака уже авторизован в mini-эмуляторе (Always allow). На mini не нужна.
+#
+# Снижение нагрузки на стрим (канал до mini идёт через туннель Hopper'а, ~99ms):
+#   • режим Orca (attach) НЕ даёт внешних флагов fps/битрейта — единственный рычаг
+#     тут `--light` (ужать разрешение самого эмулятора; помогает любому стримеру);
+#   • режим scrcpy даёт полный контроль: --fps / --bitrate / --maxsize.
+#
+# Usage: orcaemu [options] [-- <доп. флаги scrcpy>]
+#   --host H      ssh-хост туннеля (по умолч. mac-mini); "-" = не туннелировать (уже локальный)
+#   --rport N     adb-порт эмулятора на хосте (по умолч. 5555; второй эмулятор 5557, третий 5559 …)
+#   --lport N     локальный порт (по умолч. = rport)
+#   --avd NAME    если на --rport никто не слушает — headless-старт этого AVD на хосте
+#   --show M      scrcpy (своё окно, по умолч.) | orca (панель Orca) | none (только adb connect)
+#   --orca        шорткат = --show orca (встроенная панель Orca; привязана к worktree вкладки)
+#   --scrcpy      шорткат = --show scrcpy
+#   --light       ужать источник до 540x960/240 — легче стримить (реверс: --native)
+#   --native      вернуть эмулятору родное разрешение (wm size/density reset) и выйти
+#   --fps N       scrcpy: макс. fps (по умолч. 20)
+#   --bitrate B   scrcpy: битрейт видео (по умолч. 3M)
+#   --maxsize N   scrcpy: макс. сторона в px (0 = как есть)
+if [[ "$USER" != "nqs-desktop" ]]; then
+  orcaemu() {
+    local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0
+    local fps=20 bitrate=3M maxsize=0 extra=()
+    while (( $# )); do
+      case "$1" in
+        --host)    host=$2;    shift 2 ;;
+        --rport)   rport=$2;   shift 2 ;;
+        --lport)   lport=$2;   shift 2 ;;
+        --avd)     avd=$2;     shift 2 ;;
+        --show)    show=$2;    shift 2 ;;
+        --orca)    show=orca;   shift ;;
+        --scrcpy)  show=scrcpy; shift ;;
+        --fps)     fps=$2;     shift 2 ;;
+        --bitrate) bitrate=$2; shift 2 ;;
+        --maxsize) maxsize=$2; shift 2 ;;
+        --light)   light=1;    shift ;;
+        --native)  native=1;   shift ;;
+        --)        shift; extra=("$@"); break ;;
+        *) echo "orcaemu: неизвестный аргумент: $1" >&2; return 2 ;;
+      esac
+    done
+    [[ -z $lport ]] && lport=$rport
+    local serial="localhost:$lport"
+    local sdk='$HOME/Library/Android/sdk'   # раскрывается на удалённой стороне
+
+    # 1) туннель adb-порта (если host != "-")
+    if [[ $host != "-" ]]; then
+      if ! pgrep -f "L $lport:127.0.0.1:$rport" >/dev/null 2>&1; then
+        # опционально стартуем AVD на хосте, если на adb-порту пусто (console = rport-1)
+        if [[ -n $avd ]] && ! ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
+          local console=$(( rport - 1 ))
+          echo "orcaemu: headless-старт AVD '$avd' на $host (console $console)…"
+          ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot-save >/tmp/emu-$console.log 2>&1 &" </dev/null
+          ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
+        fi
+        ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+            -L "$lport:127.0.0.1:$rport" "$host" || {
+          echo "orcaemu: не удалось поднять туннель $lport→$host:$rport" >&2; return 1; }
+      fi
+    fi
+
+    # 2) локальный adb видит устройство
+    adb connect "$serial" >/dev/null 2>&1
+    adb -s "$serial" wait-for-device 2>/dev/null
+
+    # 3) нагрузка на стрим: даунскейл источника / реверс
+    if (( native )); then
+      adb -s "$serial" shell wm size reset; adb -s "$serial" shell wm density reset
+      echo "orcaemu: $serial → родное разрешение"; return 0
+    fi
+    (( light )) && { adb -s "$serial" shell wm size 540x960; adb -s "$serial" shell wm density 240; }
+
+    # 4) показ
+    case "$show" in
+      orca)   ORCA emulator attach --device "$serial" --focus ;;
+      scrcpy) local args=(-s "$serial" --window-title "$serial" --max-fps "$fps" --video-bit-rate "$bitrate")
+              (( maxsize )) && args+=(--max-size "$maxsize")
+              scrcpy "${args[@]}" "${extra[@]}" & ;;
+      none)   echo "orcaemu: $serial готов (adb connect)" ;;
+      *) echo "orcaemu: --show ждёт orca|scrcpy|none" >&2; return 2 ;;
+    esac
+  }
+
+  # mini-эмулятор одной командой (дефолты под Mac mini). ПО УМОЛЧАНИЮ — окно scrcpy
+  # (не зависит от worktree Orca, всегда показывает экран). Всё уходит в orcaemu:
+  #   miniemu                                     — окно scrcpy (дефолт)
+  #   miniemu --fps 15 --bitrate 2M --maxsize 540 — scrcpy с контролем нагрузки на стрим
+  #   miniemu --light                             — ужать источник (легче сквозь туннель)
+  #   miniemu --orca                              — встроенная панель Orca (привязка к worktree вкладки)
+  #   miniemu --native                            — вернуть родное разрешение
+  # Правило: при каждой сборке APK поднимаем экран через `miniemu` (scrcpy) — см. память
+  # feedback_apk_build_scrcpy и components/claude-on-mini.md в remote-work-setup.
+  miniemu() { orcaemu --host mac-mini --rport 5555 "$@"; }
+fi
+
 # ===== Proxy bypass — corp domains + private nets никогда не идут в xray =====
-# Расширено для defense-in-depth: даже если CLI-тулза уважает HTTPS_PROXY,
-# она НЕ отправит корп-хост в EU-экзит. См. xray routing rules как второй слой.
-export GITLAB_HOST=gitlab.services.mts.ru
-export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,.mtsbnk.ru,.mtsdigital.ru,localhost,127.0.0.1,10.0.0.0/8,11.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,.corp,.intranet,.internal,.lan,.local"
-export no_proxy="$NO_PROXY"
+# ТОЛЬКО на mini (RU-узел, $USER=nqs-desktop). На макбуке (заграница) корп-работы
+# нет вообще — корп-байты не должны исходить с не-РФ IP (R9/F6), поэтому корп-хуки
+# тут не задаются. Defense-in-depth: даже если CLI уважает HTTPS_PROXY, корп-хост
+# не уйдёт в EU-экзит. См. components/claude-on-mini.md, xray routing — второй слой.
+if [[ "$USER" == "nqs-desktop" ]]; then
+  export GITLAB_HOST=gitlab.services.mts.ru
+  export NO_PROXY="gitlab.services.mts.ru,.mts.ru,.mtsbank.ru,.mtsbnk.ru,.mtsdigital.ru,localhost,127.0.0.1,10.0.0.0/8,11.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,.corp,.intranet,.internal,.lan,.local"
+  export no_proxy="$NO_PROXY"
+fi
 
 # ===== JetBrains VM options (managed by Toolbox) =====
 [ -f "$HOME/.jetbrains.vmoptions.sh" ] && source "$HOME/.jetbrains.vmoptions.sh"
