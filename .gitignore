@@ -10,5 +10,23 @@
 
 # Editor / scratch backups
 *.bak
+*.bak.*
 *.orig
 *.swp
+
+# Codex CLI: ~/.codex — симлинк внутрь этого репозитория, поэтому весь рантайм
+# оседает здесь. Версионируем только AGENTS.md и rules/, остальное машинное.
+codex/.codex/*.sqlite*
+codex/.codex/cache/
+codex/.codex/.tmp/
+codex/.codex/sessions/
+codex/.codex/plugins/
+codex/.codex/history.jsonl
+codex/.codex/installation_id
+codex/.codex/models_cache.json
+codex/.codex/version.json
+codex/.codex/.personality_migration
+codex/.codex/.sandbox_migration
+# Абсолютные пути, trusted_hash хуков и trust-level проектов — на каждой машине свои.
+codex/.codex/config.toml
+codex/.codex/hooks.json
