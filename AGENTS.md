@@ -1,36 +1,28 @@
-# dotfiles — rules for AI coding agents
+# dotfiles — правила для AI-агентов
 
-Применяется к репо `~/dotfiles/` (GNU Stow, personal macOS config).
+Репозиторий `~/dotfiles/` — GNU Stow, личный конфиг macOS. Поведение агента (язык, запрет
+автокоммитов и автоподписей, показ команд) задано в `~/.claude/CLAUDE.md`; здесь только то,
+что специфично для этого репозитория.
 
 ---
 
 ## Контекст
 
-- Файлы управляются через GNU Stow: реальные файлы в `~/dotfiles/<package>/`, симлинки в `~`.
-- Remote: `github.com/naqswell/dotfiles` (private). Push через `gh` credential helper.
-- Без прокси для brew: `unset HTTP_PROXY HTTPS_PROXY` перед `brew install`.
+- Реальные файлы в `~/dotfiles/<package>/`, симлинки в `~` — правь реальный путь, не симлинк.
+- Remote: `github.com/naqswell/dotfiles` (private). Push идёт через `gh` credential helper:
+  токен берётся из Keychain, прокси не нужен.
+- Перед `brew install` — `unset HTTP_PROXY HTTPS_PROXY`.
 
-## Конвенции работы
+## Гочи
 
-### Редактирование файлов
-- Всегда редактируй реальный путь в `~/dotfiles/`, не симлинк в `~`.
-- Перед правкой — читай файл целиком; `.zprofile` и `.zshrc` могут включать друг друга через `.zshrc.local`.
-- Не трогай `~/.zshrc.local` — он локальный, не в git.
+- `.zprofile`, `.zshrc` и `.zshrc.local` включают друг друга перекрёстно — прежде чем менять
+  порядок загрузки, читай все три целиком.
+- `~/.zshrc.local` не в git и не редактируется: там локальные секреты и прокси-URL.
 
-### CHANGELOG
-- Файл: `CHANGELOG.md` в корне репо, формат [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-- Любое изменение → запись в `[Unreleased]` (Added / Changed / Removed / Fixed).
-- При коммите → переносим `[Unreleased]` под дату `[YYYY-MM-DD]`.
+## CHANGELOG и README
 
-### README
-- Обновляй `README.md` при каждом изменении `.zprofile` или структуры пакетов.
-- Диаграмма "How a new shell loads" должна отражать актуальный `.zprofile`.
-- Bootstrap-чеклист (секция "Full bootstrap") должен быть воспроизводим на чистом Mac.
-
-### Коммиты и push
-- Не коммитить и не пушить автоматически — только по явной просьбе.
-- Без `Co-Authored-By` и автоподписей агента.
-- Push: `git push` (gh credential helper подхватывает токен из Keychain, прокси не нужен).
-
-### Команды
-- Всегда показывай конкретную команду перед запуском.
+- `CHANGELOG.md` в корне, формат [Keep a Changelog](https://keepachangelog.com/en/1.1.0/):
+  изменение → запись в `[Unreleased]`, при коммите переносится под дату `[YYYY-MM-DD]`.
+- `README.md` описывает загрузку шелла и bootstrap на чистом Mac; чеклист «Full bootstrap» должен
+  оставаться воспроизводимым. Правка `.zprofile` или структуры пакетов расходится с README и
+  диаграммой «How a new shell loads» — обновляй их вместе.

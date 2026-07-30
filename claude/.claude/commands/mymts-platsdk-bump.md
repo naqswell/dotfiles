@@ -1,10 +1,11 @@
 ---
 description: Поднять версию platsdk в mymts и подготовить MR (feature от develop, bugfix от последнего release)
 argument-hint: <X.Y.Z> [TICKET|jira-url] [--type=feature|bugfix]
-allowed-tools: Bash(git*), Bash(glab*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion
+allowed-tools: Bash(git*), Bash(glab*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion, mcp__atlassian__jira_get_issue
 ---
 
-Ты поднимаешь версию platsdk в mymts: `~/mts/mymts/master` (worktree с `develop`).
+Ты поднимаешь версию platsdk в mymts: `~/mts/mymts/master`. Имя каталога не равно
+ветке — текущую смотри `git -C '/Users/nqs-desktop/mts/mymts/master' branch --show-current`.
 
 ## Железные правила
 
@@ -85,17 +86,18 @@ git stash push -m "local: platsdk SNAPSHOT + mavenLocal()" -- <файлы>
 
 ### 3. Актуализировать базу и создать ветку
 
-Для `feature`:
+Для `feature` — база `develop`. В дереве может лежать чужая незавершённая ветка
+(например `bugfix/...`): покажи её пользователю и спроси, прежде чем переключаться.
 ```
-git switch develop
 git fetch origin
+git switch develop
 git pull --ff-only
 git switch -c <type>/<name>
 ```
 Для `bugfix` — от релизной ветки:
 ```
 git fetch origin
-git switch -c <type>/<name> origin/release/<X.Y>
+git switch -c <type>/<name> origin/release/<X.Y[.Z]>
 ```
 
 ### 4. Бамп
@@ -103,8 +105,10 @@ git switch -c <type>/<name> origin/release/<X.Y>
 Единственное место — `infrastructure/build-settings/versions/mymts-versions/mts.libraries.toml`,
 строка `mts-plat-sdk = "..."`. Проверь, что больше нигде:
 ```
-grep -rn 'mts-plat-sdk = ' infrastructure/
+grep -rn 'mts-plat-sdk = "' infrastructure/ --exclude-dir=build
 ```
+Именно с кавычкой после `=` и с исключением `build/`: без них в выводе будут ещё объявление
+координаты (`mts-plat-sdk = { group = ... }`) и копии из сгенерированного каталога.
 Диff обязан быть ровно в одну строку — как в `[PAY-467] platsdk update`.
 Если в `git status` всплыло что-то ещё — стоп, покажи пользователю.
 

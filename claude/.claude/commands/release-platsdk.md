@@ -1,11 +1,12 @@
 ---
 description: Выпуск новой версии platsdk — релизная ветка, бамп, CHANGELOG, сборка, тег, публикация, back-merge в develop
 argument-hint: <patch|minor|major|X.Y.Z> [TICKET|jira-url] [--publish=local|remote|none]
-allowed-tools: Bash(git*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion
+allowed-tools: Bash(git*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion, mcp__atlassian__jira_get_issue
 ---
 
 Ты ведёшь релиз platsdk в `~/mts/platsdk/`. Репозиторий использует git worktrees:
-контейнер `~/mts/platsdk/`, внутри `master/`, `develop/`, `wip1/`, `wip2/`.
+контейнер `~/mts/platsdk/`, актуальный список —
+`git -C '/Users/nqs-desktop/mts/platsdk/master' worktree list`.
 
 ## Железные правила
 
@@ -28,9 +29,11 @@ allowed-tools: Bash(git*), Bash(./gradlew*), Read, Edit, Grep, AskUserQuestion
   в develop: бамп живёт в релизной ветке и возвращается в develop обратным
   мерджем, поэтому TOML в develop штатно отстаёт на версию.
   ```
-  git tag -l 'v[0-9]*' --sort=-v:refname | head -1
+  git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | head -1
   ```
-  `patch`: 8.0.5 → 8.0.6 · `minor`: 8.0.5 → 8.1.0 · `major`: 8.0.5 → 9.0.0
+  Сортировка по дате, а не `--sort=-v:refname`: схема тегов менялась (до 8.0.5 с
+  префиксом `v`, дальше без него), и version-sort поднимает старые `v`-теги наверх.
+  Арифметика на примере 8.2.2: `patch` → 8.2.3 · `minor` → 8.3.0 · `major` → 9.0.0
 - **Ключ задачи.** Вытащи регуляркой `[A-Z]+-[0-9]+` из аргументов, из ссылки
   на Jira или из прикреплённого пользователем текста задачи. Если ключ есть —
   прочитай задачу через Atlassian MCP (`jira_get_issue`) и используй заголовок
@@ -86,25 +89,31 @@ git worktree add ../release-<version> -b release/<version> develop
 
 ### 4. Бамп версии
 
-Версия должна встречаться ровно в одном месте — проверь, а не полагайся на память:
+Версия живёт в **двух** файлах, обновить оба:
+- `gradle/libs.versions.toml` → `platsdk = "<version>"` (отсюда берётся версия артефакта)
+- `version.properties` → `MAJOR_VERSION` / `MINOR_VERSION` / `PATCH_VERSION` (из этого файла
+  читает fastlane)
+
+Файлы регулярно разъезжаются — бамп обязан свести их к одной версии. `version.properties` сверяй
+глазами: полной строки вида `8.2.1` там нет, поэтому grep его не найдёт. Grep нужен для другого —
+показать посторонние места:
 ```
 grep -rn '<prev-version>' --include='*.toml' --include='*.kts' --include='*.gradle' --include='*.properties' . | grep -v CHANGELOG
 ```
-Ожидается одна строка: `gradle/libs.versions.toml` → `platsdk = "<version>"`.
-Если строк больше — остановись и покажи их.
+Ожидается одна строка — `gradle/libs.versions.toml`. Что-то ещё — остановись и покажи.
 
 ### 5. CHANGELOG
 
 Собери секцию из коммитов и Jira:
 ```
-git log --oneline --no-merges v<prev>..develop
+git log --oneline --no-merges <prev-tag>..develop
 ```
 Вытащи ключи задач, прочитай их через Atlassian MCP, посмотри диффы по существу
 (что реально изменилось для пользователя, а не как назван коммит). Формат — как
 в существующем файле, свежая секция сверху:
 
 ```
-## [<version>]
+## [<version>] - <DD.MM.YYYY>
 [TICKET] - Описание изменения на русском <br />
 ```
 
@@ -118,19 +127,22 @@ git log --oneline --no-merges v<prev>..develop
 cd '/Users/nqs-desktop/mts/platsdk/release-<version>'
 ./gradlew assembleDebug detekt
 ```
-Detekt настроен на `maxIssues: 0`. Красный результат — стоп, не коммить.
+Detekt валит сборку на любом замечании: `ignoreFailures = false` (`build.gradle.kts:26`) плюс
+унаследованный `build.maxIssues: 0` (`buildUponDefaultConfig`), baseline нет. Красный результат —
+стоп, не коммить.
 Тесты гоняй отдельным вызовом: фейл detekt в общем вызове маскирует ошибку
 компиляции тестов.
 
 ### 7. Коммит и тег
 
 ```
-git add CHANGELOG.md gradle/libs.versions.toml
+git add CHANGELOG.md gradle/libs.versions.toml version.properties
 git commit -m "version <version>"
-git tag -a v<version> -m "version <version>"
+git tag -a <version> -m "<version>"
 ```
-Аннотированный тег, сообщение совпадает с subject коммита, висит на коммите
-бампа внутри релизной ветки. Так сделаны v8.0.4 и v8.0.5.
+Аннотированный тег висит на коммите бампа внутри релизной ветки; в теле тега — голая версия,
+при желании плюс краткое описание релиза (как у 8.2.2). Тег **без префикса `v`** — так начиная
+с 8.0.6; `v`-схема осталась только в истории до 8.0.5.
 
 ### 8. Push релизной ветки и тега — руками пользователя
 
@@ -142,7 +154,7 @@ git tag -a v<version> -m "version <version>"
 cd '/Users/nqs-desktop/mts/platsdk/develop' && git push origin develop
 ```
 ```
-cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release/<version> v<version>
+cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release/<version> <version>
 ```
 
 ### 9. Публикация
@@ -151,9 +163,12 @@ cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release
   ```
   cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && ./gradlew publishLocal
   ```
-  Напомни: чтобы проверить сборку mymts против локального артефакта, нужны
-  `mts-plat-sdk = "<version>-SNAPSHOT"` и `mavenLocal()` в
-  `convention-dependency-resolution.settings.gradle.kts`. Эти правки в MR не идут.
+  Напомни: чтобы проверить сборку mymts против локального артефакта, в mymts нужны
+  `mts-plat-sdk = "<version>"` — ровно та версия, что в TOML релизной ветки, суффикс
+  `-SNAPSHOT` уместен только если ты сам временно проставил его в `libs.versions.toml`
+  platsdk перед `publishLocal` — и `mavenLocal()` в функции `local()` файла
+  `infrastructure/build-settings/versions/mymts-versions/src/main/kotlin/convention-dependency-resolution.settings.gradle.kts`.
+  Эти правки в MR не идут.
 - `--publish=remote` — **не выполняй**, публикация в артифактори необратима.
   Выведи команду и жди:
   ```
@@ -164,8 +179,8 @@ cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release
 ### 10. Вернуть релиз в develop
 
 **Не пропускай этот шаг и не откладывай его на следующий релиз.** Пока он не
-сделан, `develop` содержит старую версию в `libs.versions.toml`, а вычисление
-следующей версии по тегу расходится с тем, что видно в дереве.
+сделан, `develop` содержит старую версию в `libs.versions.toml` и `version.properties`,
+а вычисление следующей версии по тегу расходится с тем, что видно в дереве.
 
 Делать сразу после того, как тег запушен и артефакт опубликован — релиз к этому
 моменту зафиксирован, вливать безопасно.
@@ -174,7 +189,7 @@ cd '/Users/nqs-desktop/mts/platsdk/release-<version>' && git push origin release
 cd '/Users/nqs-desktop/mts/platsdk/develop'
 git fetch origin
 git pull --ff-only
-git log --oneline $(git merge-base develop origin/release/<version>)..develop -- gradle/libs.versions.toml CHANGELOG.md
+git log --oneline $(git merge-base develop origin/release/<version>)..develop -- gradle/libs.versions.toml version.properties CHANGELOG.md
 ```
 Последняя команда должна вернуть пусто — значит develop не трогал те же файлы
 и конфликта не будет. Если непусто — покажи расхождение пользователю.
@@ -190,6 +205,8 @@ cd '/Users/nqs-desktop/mts/platsdk/develop' && git push origin develop
 ### 11. Итог
 
 Кратко: что влито, что вошло в релиз, где ветка и тег, что осталось сделать.
+Напомни убрать релизный worktree, когда всё влито и запушено:
+`git -C '/Users/nqs-desktop/mts/platsdk/develop' worktree remove ../release-<version>`.
 Напомни, что `/mymts-platsdk-bump <version> [TICKET]` имеет смысл запускать
 только после того, как артефакт `ru.mts.platsdk:mts-platsdk-sdk:<version>`
 реально опубликован — иначе пайплайн MR упадёт на резолве зависимости.
