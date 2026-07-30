@@ -1,6 +1,15 @@
 # Source per-machine secrets and overrides (NOT in git)
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
 
+# ===== Toolchain bootstrap for interactive non-login shells =====
+typeset -U path PATH
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+if [[ -x /opt/homebrew/bin/mise ]]; then
+  eval "$(/opt/homebrew/bin/mise activate zsh --shims)"
+fi
+
 # ===== Aliases =====
 alias cl='claude'
 
@@ -202,6 +211,8 @@ export PATH="$PATH:$HOME/go/bin"
 # ===== Android SDK =====
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export WORKDIR="$ANDROID_HOME"
+path=("$ANDROID_HOME/platform-tools" "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/emulator" $path)
+export PATH
 # JAVA_HOME задаётся в .zprofile из mise (temurin-21). Раньше тут был
 # override на java_home -v 17 — убран, источник правды один: mise.
 
