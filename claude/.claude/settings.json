@@ -1,45 +1,74 @@
 {
+  "env": {
+    "MTS_WORKSPACE": "/Users/nqs-desktop/mts"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(cd:*)",
       "Bash(grep:*)",
+      "Bash(rg:*)",
       "Bash(ls:*)",
       "Bash(cat:*)",
       "Bash(find:*)",
       "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(jq:*)",
       "Bash(pwd)",
       "Bash(echo:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
       "Bash(which:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch --show-current)",
+      "Bash(git branch -r*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git worktree list)",
+      "Bash(git config --get:*)",
       "Bash(launchctl print:*)",
-      "Bash(launchctl list)",
       "Bash(launchctl list:*)",
       "Bash(claude plugin:*)",
       "Bash(claude plugins list)",
       "Bash(claude mcp list)",
       "Bash(defaults read:*)",
-      "Bash(bun --version)"
+      "Bash(bun --version)",
+      "WebSearch"
+    ],
+    "ask": [
+      "Bash(git commit*)",
+      "Bash(git tag*)"
     ],
     "deny": [
-      "Edit(**/cacerts*)",
-      "Write(**/cacerts*)",
-      "Edit(**/*.jks)",
-      "Write(**/*.jks)",
-      "Edit(**/local.properties)",
-      "Write(**/local.properties)",
-      "Edit(**/gradle/init.d/**)",
-      "Write(**/gradle/init.d/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.zshrc.local)",
+      "Read(//**/cacerts*)",
+      "Read(//**/*.jks)",
+      "Read(//**/local.properties)",
+      "Edit(//**/cacerts*)",
+      "Edit(//**/*.jks)",
+      "Edit(//**/local.properties)",
+      "Edit(//**/gradle/init.d/**)",
+      "Bash(git branch -D*)",
+      "Bash(git branch -d*)",
       "Bash(git push*)",
       "Bash(glab mr create*)",
       "Bash(glab mr merge*)",
       "Bash(gh pr create*)",
+      "Bash(gh pr merge*)",
       "Bash(git tag -d*)",
       "Bash(./gradlew publishRelease*)"
     ],
-    "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt.",
-    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — должны делаться руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС, никогда не редактировать. publishRelease пишет в артифактори необратимо; publishLocal (только ~/.m2) сознательно разрешён."
+    "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt. git-подкоманды только читающие; jq здесь же, потому что используется в собственных хуках.",
+    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — делаются руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС: закрыты и на запись, и на чтение. Read-deny на ~/.claude.json и ~/.zshrc.local — там лежат токены (PAT МТС, Figma). ВАЖНО: Read-deny закрывает только инструмент Read; вычитать те же файлы через Bash (cat/grep/head) он не мешает — надёжной маски для этого в синтаксисе Bash-правил нет, полагаться на неё нельзя. publishRelease пишет в артифактори необратимо; publishLocal (только ~/.m2) сознательно разрешён. ask на git commit/tag — правило «коммит только по явной просьбе» становится исполнимым, а не только текстовым."
   },
   "hooks": {
     "SessionStart": [
@@ -47,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -n \"$MTS_WORKSPACE\" ] && [ \"${PWD#$MTS_WORKSPACE}\" != \"$PWD\" ] && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; true"
+            "command": "printf 'Running on host: %s (mac-mini RU node, rc=dsk-nqs). NOT the macbook-air.\\n' \"$(hostname)\"; [ -n \"$MTS_WORKSPACE\" ] && { [ \"$PWD\" = \"$MTS_WORKSPACE\" ] || [ \"${PWD#$MTS_WORKSPACE/}\" != \"$PWD\" ]; } && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; [ -n \"$CLAUDE_RC_CHANNEL\" ] && [ -f \"$HOME/.claude/rc-channel.md\" ] && cat \"$HOME/.claude/rc-channel.md\"; true"
           }
         ]
       }
@@ -71,27 +100,133 @@
             "command": "file=$(jq -r '.tool_input.file_path // empty'); case \"$file\" in *.kt|*.kts) ;; *) exit 0 ;; esac; git -C \"$(dirname \"$file\")\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\".kt/.kts в git-репо — auto-allow\"}}\\n'; true"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty'); [ -n \"$f\" ] && [ -n \"$MTS_WORKSPACE\" ] && [ \"${f#$MTS_WORKSPACE/}\" != \"$f\" ] && [ \"${f%.kt}\" != \"$f\" ] && echo \"[detekt напомнить]: перед коммитом — ./gradlew detekt (файл: $f)\"; true"
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
           }
         ]
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi"
+  },
   "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": false,
     "pr-review-toolkit@claude-plugins-official": true
   },
+  "effortLevel": "xhigh",
+  "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "effortLevel": "xhigh"
+  "skipAutoPermissionPrompt": true
 }
