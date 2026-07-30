@@ -21,6 +21,10 @@ codex/.codex/cache/
 codex/.codex/.tmp/
 codex/.codex/sessions/
 codex/.codex/plugins/
+codex/.codex/shell_snapshots/
+codex/.codex/tmp/
+# Скиллы, которые Codex приносит с собой; свои скиллы (вне .system) версионируем.
+codex/.codex/skills/.system/
 codex/.codex/history.jsonl
 codex/.codex/installation_id
 codex/.codex/models_cache.json

@@ -1,1 +1,2 @@
 prefix_rule(pattern=["./gradlew"], decision="allow")
+prefix_rule(pattern=["git", "add"], decision="allow")
