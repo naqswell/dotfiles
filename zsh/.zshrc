@@ -221,28 +221,78 @@ export PATH
 # ssh-туннель adb-порта, цепляет локальный adb и показывает экран либо во встроенной
 # панели Orca (`ORCA emulator attach`), либо своим окном scrcpy. Гибко по host/порту,
 # так что несколько эмуляторов и другие машины подключаются тем же механизмом.
-# adb-ключ этого мака уже авторизован в mini-эмуляторе (Always allow). На mini не нужна.
+# adb-ключ этого мака должен быть авторизован в mini-эмуляторе (Always allow); cold boot
+# без снапшота может его потерять — тогда `adb devices` даёт unauthorized, см. miniemu --help.
+# На mini функция не нужна.
 #
 # Снижение нагрузки на стрим (канал до mini идёт через туннель Hopper'а, ~99ms):
 #   • режим Orca (attach) НЕ даёт внешних флагов fps/битрейта — единственный рычаг
 #     тут `--light` (ужать разрешение самого эмулятора; помогает любому стримеру);
 #   • режим scrcpy даёт полный контроль: --fps / --bitrate / --maxsize.
 #
-# Usage: orcaemu [options] [-- <доп. флаги scrcpy>]
-#   --host H      ssh-хост туннеля (по умолч. mac-mini); "-" = не туннелировать (уже локальный)
-#   --rport N     adb-порт эмулятора на хосте (по умолч. 5555; второй эмулятор 5557, третий 5559 …)
-#   --lport N     локальный порт (по умолч. = rport)
-#   --avd NAME    если на --rport никто не слушает — headless-старт этого AVD на хосте
-#   --show M      scrcpy (своё окно, по умолч.) | orca (панель Orca) | none (только adb connect)
-#   --orca        шорткат = --show orca (встроенная панель Orca; привязана к worktree вкладки)
-#   --scrcpy      шорткат = --show scrcpy
-#   --light       ужать источник до 540x960/240 — легче стримить (реверс: --native)
-#   --native      вернуть эмулятору родное разрешение (wm size/density reset) и выйти
-#   --cold        coldboot: погасить эмулятор на хосте и поднять заново без снапшота (нужен --avd)
-#   --fps N       scrcpy: макс. fps (по умолч. 20)
-#   --bitrate B   scrcpy: битрейт видео (по умолч. 3M)
-#   --maxsize N   scrcpy: макс. сторона в px (0 = как есть)
+# Полная справка живёт в `orcaemu --help` / `miniemu --help` (функции _orcaemu_usage /
+# _miniemu_usage ниже) — правишь флаги, правь и её.
 if [[ "$USER" != "nqs-desktop" ]]; then
+  _orcaemu_usage() {
+    cat <<'EOF'
+orcaemu — мост «удалённый (или локальный) Android-эмулятор → этот мак».
+
+Usage: orcaemu [options] [-- <доп. флаги scrcpy>]
+
+  --host H      ssh-хост туннеля (по умолч. mac-mini); "-" = не туннелировать (уже локальный)
+  --rport N     adb-порт эмулятора на хосте (по умолч. 5555; второй эмулятор 5557, третий 5559 …)
+  --lport N     локальный порт (по умолч. = rport)
+  --avd NAME    если на --rport никто не слушает — headless-старт этого AVD на хосте
+  --show M      scrcpy (своё окно, по умолч.) | orca (панель Orca) | none (только adb connect)
+  --orca        шорткат = --show orca (встроенная панель Orca; привязана к worktree вкладки)
+  --scrcpy      шорткат = --show scrcpy
+  --light       ужать источник до 540x960/240 — легче стримить (реверс: --native)
+  --native      вернуть эмулятору родное разрешение (wm size/density reset) и выйти
+  --cold        coldboot: погасить эмулятор на хосте и поднять заново без снапшота (нужен --avd)
+  --fps N       scrcpy: макс. fps (по умолч. 20)
+  --bitrate B   scrcpy: битрейт видео (по умолч. 3M)
+  --maxsize N   scrcpy: макс. сторона в px (0 = как есть)
+  -h, --help    эта справка
+
+Снижение нагрузки на стрим (канал до mini идёт через туннель Hopper'а, ~99ms):
+  • режим Orca (attach) НЕ даёт внешних флагов fps/битрейта — единственный рычаг
+    тут `--light` (ужать разрешение самого эмулятора; помогает любому стримеру);
+  • режим scrcpy даёт полный контроль: --fps / --bitrate / --maxsize.
+EOF
+  }
+
+  # Центр узла UI-дампа по точному text= (bounds="[x1,y1][x2,y2]") → "x y". Пусто → return 1.
+  _orcaemu_node_center() {
+    local xml=$1 label=$2 node bounds
+    node=${xml#*text=\"$label\"}
+    [[ $node == "$xml" ]] && return 1          # метки нет в дампе
+    node=${node%%/>*}
+    [[ $node == *bounds=\"* ]] || return 1
+    bounds=${node##*bounds=\"}; bounds=${bounds%%\"*}
+    local -a n=(${=${bounds//[\[\],]/ }})
+    (( ${#n} == 4 )) || return 1
+    echo $(( (n[1]+n[3])/2 )) $(( (n[2]+n[4])/2 ))
+  }
+
+  # Подтвердить диалог "Allow USB debugging" на экране удалённого эмулятора. Локальный adb в
+  # этот момент unauthorized и shell выполнить не может, поэтому всё идёт по ssh с хоста, где
+  # adb авторизован. Координаты берём из uiautomator-дампа — не зависят от разрешения экрана.
+  _orcaemu_authorize() {
+    local host=$1 console=$2
+    local sdk='$HOME/Library/Android/sdk'
+    local radb="$sdk/platform-tools/adb -s emulator-$console"
+    local xml=$(ssh "$host" "$radb shell 'uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && cat /sdcard/ui.xml'" </dev/null 2>/dev/null)
+    [[ $xml == *"Allow USB debugging"* ]] || return 1
+    local -a pt
+    # чекбокс "Always allow" — чтобы не переспрашивало после каждого рестарта эмулятора
+    pt=(${=$(_orcaemu_node_center "$xml" "Always allow from this computer")})
+    (( ${#pt} == 2 )) && ssh "$host" "$radb shell input tap ${pt[1]} ${pt[2]}" </dev/null >/dev/null 2>&1
+    pt=(${=$(_orcaemu_node_center "$xml" "Allow")})
+    (( ${#pt} == 2 )) || return 1
+    ssh "$host" "$radb shell input tap ${pt[1]} ${pt[2]}" </dev/null >/dev/null 2>&1
+    sleep 2
+  }
+
   orcaemu() {
     local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0 cold=0
     local fps=20 bitrate=3M maxsize=0 extra=()
@@ -262,18 +312,19 @@ if [[ "$USER" != "nqs-desktop" ]]; then
         --native)  native=1;   shift ;;
         --cold)    cold=1;     shift ;;
         --)        shift; extra=("$@"); break ;;
-        *) echo "orcaemu: неизвестный аргумент: $1" >&2; return 2 ;;
+        -h|--help) _orcaemu_usage; return 0 ;;
+        *) echo "orcaemu: неизвестный аргумент: $1" >&2; echo "подсказка: orcaemu --help" >&2; return 2 ;;
       esac
     done
     [[ -z $lport ]] && lport=$rport
     local serial="localhost:$lport"
     local sdk='$HOME/Library/Android/sdk'   # раскрывается на удалённой стороне
+    local console=$(( rport - 1 ))          # порт консоли эмулятора: adb-порт минус 1
+    local state i
 
     # 1) coldboot / туннель adb-порта (если host != "-")
     (( cold )) && [[ $host == "-" ]] && { echo "orcaemu: --cold требует удалённый --host (не '-')" >&2; return 2; }
     if [[ $host != "-" ]]; then
-      local console=$(( rport - 1 ))
-
       # coldboot: гасим текущий эмулятор и поднимаем с чистой загрузки без снапшота.
       # Не зависит от туннеля (он привязан к порту хоста и переживает рестарт эмулятора).
       if (( cold )); then
@@ -290,22 +341,63 @@ if [[ "$USER" != "nqs-desktop" ]]; then
         ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
       fi
 
+      # Эмулятор на хосте проверяем ВСЕГДА, а не только когда туннеля нет: залипший туннель
+      # раньше маскировал мёртвый эмулятор (локальный порт открыт, за ним пусто) — и весь
+      # блок авто-старта AVD пропускался, отчего miniemu «не стартовал» молча.
+      if [[ -n $avd ]] && ! ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
+        echo "orcaemu: headless-старт AVD '$avd' на $host (console $console)…"
+        ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot-save >/tmp/emu-$console.log 2>&1 &" </dev/null
+        ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
+      fi
+
       if ! pgrep -f "L $lport:127.0.0.1:$rport" >/dev/null 2>&1; then
-        # опционально стартуем AVD на хосте, если на adb-порту пусто (console = rport-1)
-        if [[ -n $avd ]] && ! ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
-          echo "orcaemu: headless-старт AVD '$avd' на $host (console $console)…"
-          ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot-save >/tmp/emu-$console.log 2>&1 &" </dev/null
-          ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
-        fi
         ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
             -L "$lport:127.0.0.1:$rport" "$host" || {
           echo "orcaemu: не удалось поднять туннель $lport→$host:$rport" >&2; return 1; }
       fi
     fi
 
-    # 2) локальный adb видит устройство
+    # 2) локальный adb видит устройство. Состояние проверяем явно: раньше scrcpy запускался
+    # вслепую и молча падал на offline/unauthorized — окна нет, причины не видно.
     adb connect "$serial" >/dev/null 2>&1
-    adb -s "$serial" wait-for-device 2>/dev/null
+    for i in {1..10}; do
+      state=$(adb -s "$serial" get-state 2>/dev/null)
+      [[ $state == (device|unauthorized) ]] && break
+      sleep 1
+    done
+
+    # залипший туннель: локальный порт слушает, но за ним никого — пересоздаём и пробуем снова
+    if [[ $state != (device|unauthorized) && $host != "-" ]]; then
+      echo "orcaemu: $serial → '${state:-нет ответа}', пересоздаю туннель $lport→$host:$rport…"
+      pkill -f "L $lport:127.0.0.1:$rport" >/dev/null 2>&1
+      adb disconnect "$serial" >/dev/null 2>&1
+      ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+          -L "$lport:127.0.0.1:$rport" "$host" || {
+        echo "orcaemu: не удалось поднять туннель $lport→$host:$rport" >&2; return 1; }
+      adb connect "$serial" >/dev/null 2>&1
+      for i in {1..10}; do
+        state=$(adb -s "$serial" get-state 2>/dev/null)
+        [[ $state == (device|unauthorized) ]] && break
+        sleep 1
+      done
+    fi
+
+    # unauthorized: эмулятор не принял ключ этого мака (новый AVD, wipe data, свежий adbkey).
+    # Сами подтверждаем диалог на его экране — иначе scrcpy просто не откроется.
+    if [[ $state == unauthorized && $host != "-" ]]; then
+      echo "orcaemu: $serial unauthorized — подтверждаю 'Allow USB debugging' на экране эмулятора…"
+      if _orcaemu_authorize "$host" "$console"; then
+        adb disconnect "$serial" >/dev/null 2>&1
+        adb connect "$serial" >/dev/null 2>&1
+        state=$(adb -s "$serial" get-state 2>/dev/null)
+      fi
+    fi
+
+    if [[ $state != device ]]; then
+      echo "orcaemu: $serial не готов (state='${state:-нет ответа}') — экран не показываю." >&2
+      echo "         диагностика и ручное лечение: miniemu --help" >&2
+      return 1
+    fi
 
     # 3) нагрузка на стрим: даунскейл источника / реверс
     if (( native )); then
@@ -338,8 +430,99 @@ if [[ "$USER" != "nqs-desktop" ]]; then
   # эмулятор, если на порту пусто.
   # Правило: при каждой сборке APK поднимаем экран через `miniemu` (scrcpy) — см. память
   # feedback_apk_build_scrcpy и components/claude-on-mini.md в remote-work-setup.
+  _miniemu_usage() {
+    cat <<'EOF'
+miniemu — эмулятор с Mac mini на экран этого макбука одной командой.
+Обёртка над orcaemu с дефолтами: --host mac-mini --rport 5555 --avd small_phone_api36.
+Эмулятор физически живёт на mini; локально работают только ssh-туннель, adb и scrcpy.
+
+Usage: miniemu [coldboot] [опции orcaemu] [-- <доп. флаги scrcpy>]
+
+  miniemu                                     окно scrcpy (дефолт)
+  miniemu --fps 15 --bitrate 2M --maxsize 540 scrcpy с контролем нагрузки на стрим
+  miniemu --light                             ужать источник (легче сквозь туннель)
+  miniemu --orca                              встроенная панель Orca (привязка к worktree вкладки)
+  miniemu --native                            вернуть родное разрешение
+  miniemu coldboot                            погасить эмулятор и поднять заново без снапшота
+  miniemu status                              что где сломано: эмулятор / туннель / adb / scrcpy
+  miniemu --help                              эта справка
+
+`coldboot` — позиционный синоним --cold (для мышечной памяти). AVD зашит в дефолты,
+поэтому miniemu сам поднимает эмулятор на mini, если на порту 5555 пусто.
+
+Самолечение (orcaemu делает это сам, молча падать окном scrcpy больше не должен):
+  • мёртвый эмулятор на mini — поднимается, даже если ssh-туннель уже висит;
+  • залипший туннель (порт слушает, за ним пусто) — убивается и создаётся заново;
+  • unauthorized — диалог "Allow USB debugging" подтверждается автоматически по ssh
+    (uiautomator dump → тап по "Always allow from this computer" и "Allow");
+  • если устройство так и не стало `device` — печатается state и код возврата 1.
+
+Ручная диагностика, если всё же не поднялось:
+    adb devices                                   # ждём: localhost:5555  device
+    ssh mac-mini 'nc -z 127.0.0.1 5555; pgrep -fl qemu'   # жив ли эмулятор на mini
+    ssh mac-mini 'tail -30 /tmp/emu-5554.log'     # лог старта эмулятора
+    pkill -f 'L 5555:127.0.0.1:5555'; adb disconnect localhost:5555; miniemu
+    ssh mac-mini '~/Library/Android/sdk/platform-tools/adb -s emulator-5554 exec-out screencap -p' > /tmp/s.png
+                                                  # посмотреть, что на экране эмулятора
+EOF
+  }
+
+  # Быстрый ответ на «почему нет экрана»: по слоям — эмулятор на mini, ssh-туннель, локальный
+  # adb, окно scrcpy. Ничего не поднимает и не чинит, только смотрит и подсказывает.
+  _miniemu_status() {
+    local host=mac-mini rport=5555 lport=5555 console=5554 serial="localhost:5555"
+    local sdk='$HOME/Library/Android/sdk'
+    local remote port qemu radb state line pids log=""
+    print -r -- "miniemu status → $host, adb-порт $rport, console emulator-$console"
+
+    # один ssh на все удалённые проверки, чтобы не платить RTT четыре раза
+    remote=$(ssh -o ConnectTimeout=8 "$host" "
+      nc -z 127.0.0.1 $rport >/dev/null 2>&1 && echo port:up || echo port:down
+      pgrep -f qemu-system >/dev/null 2>&1 && echo qemu:up || echo qemu:down
+      echo \"radb:\$($sdk/platform-tools/adb devices 2>/dev/null | sed -n 2p | tr -d '\r' | tr '\t' ' ')\"
+      tail -3 /tmp/emu-$console.log 2>/dev/null | sed 's/^/log:/'
+    " </dev/null 2>/dev/null)
+    [[ -z $remote ]] && { print -r -- "  ssh $host          НЕДОСТУПЕН — дальше смотреть нечего"; return 1; }
+    for line in ${(f)remote}; do
+      case $line in
+        port:*) port=${line#port:} ;;
+        qemu:*) qemu=${line#qemu:} ;;
+        radb:*) radb=${line#radb:} ;;
+        log:*)  log+="    ${line#log:}"$'\n' ;;
+      esac
+    done
+
+    print -r -- "  ssh $host        OK"
+    if [[ $port == up ]]; then
+      print -r -- "  эмулятор на mini   порт $rport слушает (qemu:$qemu)"
+    else
+      print -r -- "  эмулятор на mini   НЕ ЗАПУЩЕН — порт $rport пуст (qemu:$qemu) → лечит: miniemu"
+    fi
+    print -r -- "  adb на mini        ${radb:-нет устройств}"
+
+    pids=$(pgrep -f "L $lport:127.0.0.1:$rport" 2>/dev/null | tr '\n' ' ')
+    [[ -n $pids ]] && print -r -- "  ssh-туннель        есть (pid ${pids% })" \
+                   || print -r -- "  ssh-туннель        НЕТ → поднимет: miniemu"
+
+    state=$(adb -s "$serial" get-state 2>/dev/null)
+    case $state in
+      device)       print -r -- "  локальный adb      $serial device" ;;
+      unauthorized) print -r -- "  локальный adb      $serial UNAUTHORIZED → miniemu подтвердит диалог сам" ;;
+      *)            print -r -- "  локальный adb      $serial ${state:-нет ответа} → miniemu пересоздаст туннель" ;;
+    esac
+
+    pids=$(pgrep -f "scrcpy -s $serial" 2>/dev/null | tr '\n' ' ')
+    [[ -n $pids ]] && print -r -- "  окно scrcpy        запущено (pid ${pids% })" \
+                   || print -r -- "  окно scrcpy        не запущено"
+
+    [[ $port != up && -n $log ]] && { print -r -- "  хвост /tmp/emu-$console.log:"; print -rn -- "$log"; }
+    return 0
+  }
+
   miniemu() {
     local -a pre
+    [[ $1 == (-h|--help|help) ]] && { _miniemu_usage; return 0; }
+    [[ $1 == status ]] && { _miniemu_status; return $?; }
     [[ $1 == coldboot ]] && { pre=(--cold); shift; }
     orcaemu --host mac-mini --rport 5555 --avd small_phone_api36 "${pre[@]}" "$@"
   }
