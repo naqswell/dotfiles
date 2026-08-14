@@ -5,6 +5,7 @@ All notable changes to this dotfiles repo. Format: [Keep a Changelog](https://ke
 ## [Unreleased]
 
 ### Added
+- `claude/.claude/skills/apk-send/SKILL.md` — скилл отправки собранного APK в «Избранное» Telegram. Сам скрипт живёт в `remote-work-setup/bin/apk-send` (tdl поверх локального xray: Telegram с этой машины напрямую недоступен). Скилл нужен, чтобы агент знал про команду из любого репозитория, и запрещает вызывать `tdl` напрямую в обход предохранителей «только .apk» и «только Избранное». Плюс опциональный `pre-push` хук (`apk-send hook install`): шлёт сборку при пуше, но только если она новее последнего коммита, в фоне и никогда не отменяя push
 - `claude/.claude/commands/release-platsdk.md` — слэш-команда релиза platsdk: back-merge прошлого релиза в `develop`, релизная ветка в отдельном worktree, бамп версии, CHANGELOG из git log + Jira, `assembleDebug detekt` до тега, аннотированный тег `v<version>`, `--publish=local|remote|none`
 - `claude/.claude/commands/mymts-platsdk-bump.md` — слэш-команда бампа `mts-plat-sdk` в mymts и подготовки MR: `feature` от `develop`, `bugfix` от последней `release/*`, MR целится в ту же ветку, от которой отведён
 - `claude/.claude/settings.json`: `deny` на `glab mr merge*`, `git tag -d*`, `./gradlew publishRelease*` — необратимые действия выполняет пользователь, не агент. `publishLocal` (пишет только в `~/.m2`) сознательно разрешён
