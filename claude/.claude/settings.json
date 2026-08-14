@@ -38,11 +38,9 @@
       "Bash(claude mcp list)",
       "Bash(defaults read:*)",
       "Bash(bun --version)",
-      "WebSearch"
-    ],
-    "ask": [
       "Bash(git commit*)",
-      "Bash(git tag*)"
+      "WebSearch",
+      "Bash(apk-send:*)"
     ],
     "deny": [
       "Read(~/.claude.json)",
@@ -62,11 +60,16 @@
       "Bash(gh pr create*)",
       "Bash(gh pr merge*)",
       "Bash(git tag -d*)",
-      "Bash(./gradlew publishRelease*)"
+      "Bash(./gradlew publishRelease*)",
+      "Bash(tdl:*)"
     ],
-    "_commentAllow": "Read-only утилиты без побочных эффектов. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt. git-подкоманды только читающие; jq здесь же, потому что используется в собственных хуках.",
-    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — делаются руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС: закрыты и на запись, и на чтение. Read-deny на ~/.claude.json и ~/.zshrc.local — там лежат токены (PAT МТС, Figma). ВАЖНО: Read-deny закрывает только инструмент Read; вычитать те же файлы через Bash (cat/grep/head) он не мешает — надёжной маски для этого в синтаксисе Bash-правил нет, полагаться на неё нельзя. publishRelease пишет в артифактори необратимо; publishLocal (только ~/.m2) сознательно разрешён. ask на git commit/tag — правило «коммит только по явной просьбе» становится исполнимым, а не только текстовым."
+    "ask": [
+      "Bash(git tag*)"
+    ],
+    "_commentAllow": "Read-only утилиты без побочных эффектов, плюс git commit. cd:* нужен для составных команд (cd dir && cmd) — Claude Code разбирает компаунды и проверяет каждую подкоманду. Не покрывает пайпы вроде '... | grep ...' — там головная команда другая, нужен будет prompt. jq здесь же, потому что используется в собственных хуках. git commit разрешён без подтверждения — push всё равно в deny, необратимого действия без коммита не бывает.",
+    "_commentDeny": "Жёсткие запреты на сетевые/публичные действия — делаются руками пользователя, не Claude. cacerts/jks/local.properties/gradle init.d — корпоративные секреты МТС: закрыты и на запись, и на чтение. Read-deny на ~/.claude.json и ~/.zshrc.local — там лежат токены (PAT МТС, Figma). ВАЖНО: Read-deny закрывает только инструмент Read; вычитать те же файлы через Bash (cat/grep/head) он не мешает — надёжной маски для этого в синтаксисе Bash-правил нет, полагаться на неё нельзя. publishRelease пишет в артифактори необратимо; publishLocal (только ~/.m2) сознательно разрешён. ask на git tag — теговый коммит легко перепутать с релизным тегом, тоже explicit."
   },
+  "model": "opus[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -74,6 +77,15 @@
           {
             "type": "command",
             "command": "printf 'host: %s (rc=%s)\\n' \"$(hostname -s)\" \"$(cat \"$HOME/.config/claude-rc/name\" 2>/dev/null || echo -)\"; W=$(ls -d \"$HOME/mts\" \"$HOME/!!MTS\" 2>/dev/null | head -1); [ -n \"$W\" ] && { [ \"$PWD\" = \"$W\" ] || [ \"${PWD#$W/}\" != \"$PWD\" ]; } && printf 'pwd: %s\\nbranch: %s\\n' \"$PWD\" \"$(git -C \"$PWD\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(not git)')\"; [ -n \"$CLAUDE_RC_CHANNEL\" ] && [ -f \"$HOME/.claude/rc-channel.md\" ] && cat \"$HOME/.claude/rc-channel.md\"; true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "timeout": 10
           }
         ]
       }
@@ -103,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -115,7 +127,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -126,7 +138,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -137,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -148,7 +160,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -159,7 +171,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -170,7 +182,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -181,7 +193,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -193,7 +205,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -205,7 +217,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-hook.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-hook.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-hook.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+            "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
             "timeout": 10
           }
         ]
@@ -214,19 +226,19 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "if [ -f \"$HOME/.orca/agent-hooks/claude-statusline.sh\" ] && [ -r \"$HOME/.orca/agent-hooks/claude-statusline.sh\" ] && [ -x \"$HOME/.orca/agent-hooks/claude-statusline.sh\" ]; then /bin/sh \"$HOME/.orca/agent-hooks/claude-statusline.sh\"; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi"
+    "command": "if [ -f '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ] && [ -r '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ] && [ -x '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh' ]; then /bin/sh '/Users/nqs-desktop/.orca/agent-hooks/claude-statusline.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi"
   },
   "enabledPlugins": {
     "gopls-lsp@claude-plugins-official": false,
     "pr-review-toolkit@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
+    "swift-lsp@claude-plugins-official": true,
+    "mattpocock-skills@claude-plugins-official": true
   },
   "effortLevel": "xhigh",
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "model": "opus[1m]",
-  "tui": "fullscreen"
+  "skipAutoPermissionPrompt": true
 }
