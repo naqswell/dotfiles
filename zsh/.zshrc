@@ -293,13 +293,37 @@ EOF
     sleep 2
   }
 
+  # Какой adb-порт эмулятора реально занят на хосте. Порт «плывёт»: 5554 занят — следующий
+  # инстанс берёт 5556, и т.д. Хардкод rport=5555 из-за этого указывал в пустоту рядом с
+  # живым эмулятором: orcaemu считал его мёртвым и пытался поднять второй. Пусто — нет
+  # запущенных, тогда остаётся дефолт вызывающего.
+  _orcaemu_host_rport() {
+    local console
+    console=$(ssh -o ConnectTimeout=8 "$1" \
+      '$HOME/Library/Android/sdk/platform-tools/adb devices 2>/dev/null' </dev/null 2>/dev/null \
+      | sed -n 's/^emulator-\([0-9]*\)[[:space:]].*/\1/p' | head -1)
+    [[ -n $console ]] && echo $(( console + 1 ))
+  }
+
+  # AVD на хосте могли удалить или переименовать (так исчез small_phone_api36). Без проверки
+  # emulator уходит в /tmp/emu-*.log с "Unknown AVD name", а orcaemu печатает «поднимаю…» и
+  # висит на wait-for-device — причина видна только в хвосте лога.
+  _orcaemu_check_avd() {
+    local host=$1 avd=$2 sdk='$HOME/Library/Android/sdk' avds
+    avds=$(ssh -o ConnectTimeout=8 "$host" "$sdk/emulator/emulator -list-avds 2>/dev/null" \
+      </dev/null 2>/dev/null | tr -d '\r')
+    print -r -- "$avds" | grep -qx -- "$avd" && return 0
+    echo "orcaemu: на $host нет AVD '$avd'. Есть: ${${(j:, :)${(f)avds}}:-—}" >&2
+    return 1
+  }
+
   orcaemu() {
     local host=mac-mini rport=5555 lport="" avd="" show=scrcpy light=0 native=0 cold=0
-    local fps=20 bitrate=3M maxsize=0 extra=()
+    local fps=20 bitrate=3M maxsize=0 extra=() rport_set=0
     while (( $# )); do
       case "$1" in
         --host)    host=$2;    shift 2 ;;
-        --rport)   rport=$2;   shift 2 ;;
+        --rport)   rport=$2; rport_set=1; shift 2 ;;
         --lport)   lport=$2;   shift 2 ;;
         --avd)     avd=$2;     shift 2 ;;
         --show)    show=$2;    shift 2 ;;
@@ -316,6 +340,16 @@ EOF
         *) echo "orcaemu: неизвестный аргумент: $1" >&2; echo "подсказка: orcaemu --help" >&2; return 2 ;;
       esac
     done
+    # Порт не задан руками → спросить хост, где эмулятор на самом деле. Явный --rport
+    # всегда сильнее: он же способ дотянуться до конкретного из нескольких эмуляторов.
+    if (( ! rport_set )) && [[ $host != "-" ]]; then
+      local detected=$(_orcaemu_host_rport "$host")
+      if [[ -n $detected && $detected != $rport ]]; then
+        echo "orcaemu: на $host эмулятор слушает adb-порт $detected (дефолт $rport пуст) — беру его"
+        rport=$detected
+      fi
+    fi
+
     [[ -z $lport ]] && lport=$rport
     local serial="localhost:$lport"
     local sdk='$HOME/Library/Android/sdk'   # раскрывается на удалённой стороне
@@ -329,6 +363,7 @@ EOF
       # Не зависит от туннеля (он привязан к порту хоста и переживает рестарт эмулятора).
       if (( cold )); then
         [[ -z $avd ]] && { echo "orcaemu: --cold требует --avd" >&2; return 2; }
+        _orcaemu_check_avd "$host" "$avd" || return 1
         if ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
           echo "orcaemu: coldboot — гашу emulator-$console на $host…"
           ssh "$host" "$sdk/platform-tools/adb -s emulator-$console emu kill" </dev/null 2>/dev/null
@@ -345,6 +380,7 @@ EOF
       # раньше маскировал мёртвый эмулятор (локальный порт открыт, за ним пусто) — и весь
       # блок авто-старта AVD пропускался, отчего miniemu «не стартовал» молча.
       if [[ -n $avd ]] && ! ssh "$host" "nc -z 127.0.0.1 $rport" >/dev/null 2>&1; then
+        _orcaemu_check_avd "$host" "$avd" || return 1
         echo "orcaemu: headless-старт AVD '$avd' на $host (console $console)…"
         ssh "$host" "nohup $sdk/emulator/emulator @$avd -port $console -no-window -no-snapshot-save >/tmp/emu-$console.log 2>&1 &" </dev/null
         ssh "$host" "$sdk/platform-tools/adb -s emulator-$console wait-for-device && until [ \"\$($sdk/platform-tools/adb -s emulator-$console shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 1; done" </dev/null
@@ -426,15 +462,17 @@ EOF
   #   miniemu --native                            — вернуть родное разрешение
   #   miniemu coldboot                            — погасить эмулятор и поднять заново без снапшота (чистая загрузка)
   # Субкоманд `coldboot` — синоним `--cold` (позиционный, для мышечной памяти). AVD по
-  # умолчанию (small_phone_api36) зашит в дефолты, поэтому miniemu ещё и сам поднимает
-  # эмулятор, если на порту пусто.
+  # умолчанию (mts_mitm_api36) зашит в дефолты, поэтому miniemu ещё и сам поднимает
+  # эмулятор, если на порту пусто. Порт НЕ зашит: orcaemu спрашивает у хоста, где живой
+  # эмулятор (5554 занят → следующий берёт 5556), и 5555 остаётся лишь запасным дефолтом.
   # Правило: при каждой сборке APK поднимаем экран через `miniemu` (scrcpy) — см. память
   # feedback_apk_build_scrcpy и components/claude-on-mini.md в remote-work-setup.
   _miniemu_usage() {
     cat <<'EOF'
 miniemu — эмулятор с Mac mini на экран этого макбука одной командой.
-Обёртка над orcaemu с дефолтами: --host mac-mini --rport 5555 --avd small_phone_api36.
+Обёртка над orcaemu с дефолтами: --host mac-mini --avd mts_mitm_api36.
 Эмулятор физически живёт на mini; локально работают только ssh-туннель, adb и scrcpy.
+adb-порт не зашит: берётся у запущенного на mini эмулятора (console+1), иначе 5555.
 
 Usage: miniemu [coldboot] [опции orcaemu] [-- <доп. флаги scrcpy>]
 
@@ -448,7 +486,9 @@ Usage: miniemu [coldboot] [опции orcaemu] [-- <доп. флаги scrcpy>]
   miniemu --help                              эта справка
 
 `coldboot` — позиционный синоним --cold (для мышечной памяти). AVD зашит в дефолты,
-поэтому miniemu сам поднимает эмулятор на mini, если на порту 5555 пусто.
+поэтому miniemu сам поднимает эмулятор на mini, если ни один не запущен. Если такого
+AVD на mini уже нет (переименовали, пересоздали) — orcaemu скажет это прямо и покажет
+список доступных, вместо молчаливого "Unknown AVD name" в /tmp/emu-*.log.
 
 Самолечение (orcaemu делает это сам, молча падать окном scrcpy больше не должен):
   • мёртвый эмулятор на mini — поднимается, даже если ssh-туннель уже висит;
@@ -457,7 +497,8 @@ Usage: miniemu [coldboot] [опции orcaemu] [-- <доп. флаги scrcpy>]
     (uiautomator dump → тап по "Always allow from this computer" и "Allow");
   • если устройство так и не стало `device` — печатается state и код возврата 1.
 
-Ручная диагностика, если всё же не поднялось:
+Ручная диагностика, если всё же не поднялось (порты ниже — дефолтные 5555/5554;
+реальные показывает шапка `miniemu status`, они зависят от того, чем занят 5554):
     adb devices                                   # ждём: localhost:5555  device
     ssh mac-mini 'nc -z 127.0.0.1 5555; pgrep -fl qemu'   # жив ли эмулятор на mini
     ssh mac-mini 'tail -30 /tmp/emu-5554.log'     # лог старта эмулятора
@@ -470,28 +511,37 @@ EOF
   # Быстрый ответ на «почему нет экрана»: по слоям — эмулятор на mini, ssh-туннель, локальный
   # adb, окно scrcpy. Ничего не поднимает и не чинит, только смотрит и подсказывает.
   _miniemu_status() {
-    local host=mac-mini rport=5555 lport=5555 console=5554 serial="localhost:5555"
+    local host=mac-mini console=5554 rport lport serial
     local sdk='$HOME/Library/Android/sdk'
     local remote port qemu radb state line pids log=""
-    print -r -- "miniemu status → $host, adb-порт $rport, console emulator-$console"
 
-    # один ssh на все удалённые проверки, чтобы не платить RTT четыре раза
+    # Один ssh на все удалённые проверки, чтобы не платить RTT четыре раза; порт эмулятора
+    # удалённая сторона вычисляет сама (та же логика, что в _orcaemu_host_rport). С хардкодом
+    # 5555 статус рапортовал «эмулятор НЕ ЗАПУЩЕН» про живой эмулятор, поднятый на 5556.
     remote=$(ssh -o ConnectTimeout=8 "$host" "
-      nc -z 127.0.0.1 $rport >/dev/null 2>&1 && echo port:up || echo port:down
+      c=\$($sdk/platform-tools/adb devices 2>/dev/null | sed -n 's/^emulator-\\([0-9]*\\)[[:space:]].*/\\1/p' | head -1)
+      c=\${c:-$console}
+      echo \"console:\$c\"
+      nc -z 127.0.0.1 \$((c + 1)) >/dev/null 2>&1 && echo port:up || echo port:down
       pgrep -f qemu-system >/dev/null 2>&1 && echo qemu:up || echo qemu:down
       echo \"radb:\$($sdk/platform-tools/adb devices 2>/dev/null | sed -n 2p | tr -d '\r' | tr '\t' ' ')\"
-      tail -3 /tmp/emu-$console.log 2>/dev/null | sed 's/^/log:/'
+      tail -3 /tmp/emu-\$c.log 2>/dev/null | sed 's/^/log:/'
     " </dev/null 2>/dev/null)
-    [[ -z $remote ]] && { print -r -- "  ssh $host          НЕДОСТУПЕН — дальше смотреть нечего"; return 1; }
+    [[ -z $remote ]] && {
+      print -r -- "miniemu status → $host"
+      print -r -- "  ssh $host          НЕДОСТУПЕН — дальше смотреть нечего"; return 1; }
     for line in ${(f)remote}; do
       case $line in
+        console:*) console=${line#console:} ;;
         port:*) port=${line#port:} ;;
         qemu:*) qemu=${line#qemu:} ;;
         radb:*) radb=${line#radb:} ;;
         log:*)  log+="    ${line#log:}"$'\n' ;;
       esac
     done
+    rport=$(( console + 1 )); lport=$rport; serial="localhost:$rport"
 
+    print -r -- "miniemu status → $host, adb-порт $rport, console emulator-$console"
     print -r -- "  ssh $host        OK"
     if [[ $port == up ]]; then
       print -r -- "  эмулятор на mini   порт $rport слушает (qemu:$qemu)"
@@ -524,7 +574,10 @@ EOF
     [[ $1 == (-h|--help|help) ]] && { _miniemu_usage; return 0; }
     [[ $1 == status ]] && { _miniemu_status; return $?; }
     [[ $1 == coldboot ]] && { pre=(--cold); shift; }
-    orcaemu --host mac-mini --rport 5555 --avd small_phone_api36 "${pre[@]}" "$@"
+    # --rport сознательно НЕ передаём: явный флаг выключил бы автоопределение порта
+    # в orcaemu, а именно из-за жёсткого 5555 miniemu ломался, когда эмулятор на mini
+    # поднимался на 5556. Нужен конкретный — передавай --rport при вызове.
+    orcaemu --host mac-mini --avd mts_mitm_api36 "${pre[@]}" "$@"
   }
 fi
 
