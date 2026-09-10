@@ -38,8 +38,8 @@ allowed-tools: Bash
 ```
 base=$(git merge-base HEAD origin/develop)
 cache=$(platsdk-baseline "$base")
-./gradlew :presentation:ui:testDebugUnitTest --tests 'ru.mts.platsdk.ui.screenshot.*'
-gallery-diff "$cache" presentation/ui/build/screenshots --zip /tmp/srez.zip
+./gradlew :presentation:ui:testDebugUnitTest --tests 'ru.mts.platsdk.ui.screenshot.*' \
+  && gallery-diff "$cache" presentation/ui/build/screenshots --zip /tmp/srez.zip
 ```
 
 `platsdk-baseline` кэширует прогон базовой ревизии, так что второй и третий

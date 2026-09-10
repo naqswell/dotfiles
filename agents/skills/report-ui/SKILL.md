@@ -35,8 +35,8 @@ git status --porcelain
 
 ```
 cache=$(platsdk-baseline "$base")
-./gradlew :presentation:ui:testDebugUnitTest --tests 'ru.mts.platsdk.ui.screenshot.*'
-gallery-diff "$cache" presentation/ui/build/screenshots
+./gradlew :presentation:ui:testDebugUnitTest --tests 'ru.mts.platsdk.ui.screenshot.*' \
+  && gallery-diff "$cache" presentation/ui/build/screenshots
 ```
 
 `gallery-diff` печатает JSON: `changed` и `common` — сколько кадров разошлось из
@@ -82,13 +82,13 @@ apk-send file <after>  "ПОСЛЕ · <screenTitle> · <caseTitle>
 Потом сам отчёт файлом:
 
 ```
-apk-send file отчёт.md "UI · <репозиторий> · <ветка>
+apk-send file ui-<репозиторий>-<ветка>-<ДД.ММ>.md "UI · <репозиторий> · <ветка>
 <N> кадров из <M> · экранов затронуто <K>"
 ```
 Имя файла обязано нести линзу, репозиторий и ветку: в «Избранном» отчёты со всех
 веток лежат вперемешку, и три `отчёт.md` подряд неразличимы. Формат —
 `<линза>-<репозиторий>-<ветка без feature/|bugfix/>-<ДД.ММ>.md`, например
-`qa-platsdk-fatal-modal-10.09.md`. Косые черты в имени ветки заменяй дефисом.
+`ui-platsdk-fatal-modal-10.09.md`. Косые черты в имени ветки заменяй дефисом.
 
 
 ## Что в отчёте
@@ -100,15 +100,26 @@ apk-send file отчёт.md "UI · <репозиторий> · <ветка>
 - Экраны, тронутые в коде, но не покрытые матрицей. Список непокрытых ведёт
   `MatrixCoverageTest.excused` — не помни его наизусть, вычитай:
 
-  ```
-  excused=$(sed -n '/val excused/,/^    )/p' \
-    presentation/ui/src/test/java/ru/mts/platsdk/ui/screenshot/MatrixCoverageTest.kt \
-    | grep -oE '[A-Za-z0-9]+Screen::class' | sed 's/::class//' | sort -u | paste -sd'|' -)
-  git diff "$base"..HEAD -- '*.kt' | grep -E '^[+-]' | grep -oE "\b($excused)\b" | sort -u
-  ```
+```
+test=presentation/ui/src/test/java/ru/mts/platsdk/ui/screenshot/MatrixCoverageTest.kt
+[ -f "$test" ] || echo "МАТРИЦЫ В ЭТОМ РЕПОЗИТОРИИ НЕТ"
+sed -n '/val excused/,/^    )/p' "$test" 2>/dev/null | grep -oE '[A-Za-z0-9]+Screen::class' | sed 's/::class//'
+git diff --name-only "$base" -- 'presentation/ui/src/main/*' 'presentation/ui-model/src/main/*'
+```
 
-  Ищи по содержимому диффа, а не по именам файлов: экраны объявлены внутри
-  `PlatSdkScreen.kt`, и по имени файла их там не видно.
+Первая команда даёт список непокрытых экранов, вторая — изменённые файлы
+интерфейса. **Сопоставь их сам**, автоматического способа нет: имя экрана из
+списка встречается в `PlatSdkScreen.kt`, а вёрстка того же экрана живёт в файлах
+с другими именами, так что ни грепом по диффу, ни грепом по путям это не решается.
+
+Три правила, чтобы не соврать:
+
+- вывод пуст или напечатано `МАТРИЦЫ В ЭТОМ РЕПОЗИТОРИИ НЕТ` — раздел пропусти и
+  скажи об этом прямо. Молча написать «непокрытых экранов не тронуто» нельзя: это
+  утверждение, для которого у тебя нет данных;
+- диапазон здесь `"$base"` без `..HEAD`, чтобы в дифф попало и незакоммиченное;
+- в чём не уверен, помечай как неуверенное. «Возможно, затронут» — честный ответ,
+  «не затронут» без проверки — нет.
 
   Отдельно отмечай, что состояние могло не попасть в матрицу: отбор состояний
   одноразовый, полного перебора нет.
