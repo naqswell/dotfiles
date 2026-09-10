@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,6 +86,16 @@ def unlink(path):
     path.unlink()
 
 
+def plugin_skills():
+    """Имена скиллов, которые Claude получает через плагин, а не плоским симлинком."""
+    names = set()
+    for plugin_json in (HOME_DIR / '.claude/skills').glob('*/.claude-plugin/plugin.json'):
+        skills = plugin_json.parent.parent / 'skills'
+        if skills.is_dir():
+            names |= {s.name for s in skills.iterdir() if (s / 'SKILL.md').exists()}
+    return names
+
+
 def install():
     manifest = json.loads((KIT / 'manifest.json').read_text())
     for dest in manifest['instructionTargets']:
@@ -96,11 +107,7 @@ def install():
     # Скиллы, собранные в плагин, Claude получает через него — плоский симлинк
     # рядом показал бы их в списке сессии дважды. Остальные клиенты про плагины
     # не знают, поэтому плоская раскатка в ~/.agents/skills остаётся каноном.
-    in_plugin = set()
-    for plugin_json in (HOME_DIR / '.claude/skills').glob('*/.claude-plugin/plugin.json'):
-        skills = plugin_json.parent.parent / 'skills'
-        if skills.is_dir():
-            in_plugin |= {s.name for s in skills.iterdir() if (s / 'SKILL.md').exists()}
+    in_plugin = plugin_skills()
     for path in sorted((KIT / 'skills').iterdir()):
         if (path / 'SKILL.md').exists():
             link(HOME_DIR / '.agents/skills' / path.name, path)
@@ -108,7 +115,8 @@ def install():
                 flat = physical(HOME_DIR / '.claude/skills' / path.name)
                 if flat.exists() and not flat.is_symlink():
                     print('WARN дубль: ' + str(flat) + ' — настоящий каталог, '
-                          'скилл будет показан дважды. Уберите его руками')
+                          'скилл будет показан дважды. Уберите его руками',
+                          file=sys.stderr)
                 else:
                     unlink(flat)
             else:
@@ -194,6 +202,7 @@ def install():
 def check():
     manifest = json.loads((KIT / 'manifest.json').read_text())
     failures = []
+    in_plugin = plugin_skills()
     for dest in manifest['instructionTargets']:
         path = HOME_DIR / dest
         ok = path.exists() and path.resolve() == (KIT / 'AGENTS.md').resolve()
@@ -205,12 +214,19 @@ def check():
             failures.append('нет каталога ' + str(base))
             continue
         for path in base.iterdir():
+            if path.is_symlink() and not path.exists():
+                failures.append('битый симлинк: ' + str(path))
+                continue
             # Каталог плагина скиллы держит внутри, своего SKILL.md у него нет.
             # Обычные файлы (.DS_Store и прочий сор) скиллами не притворяются.
             if not path.is_dir() or (path / '.claude-plugin/plugin.json').exists():
                 continue
             if not (path / 'SKILL.md').exists():
                 failures.append(str(path))
+            elif base.name == 'skills' and base.parent.name == '.claude' \
+                    and path.name in in_plugin:
+                # Скилл виден Claude и плоско, и через плагин — задвоится в сессии.
+                failures.append('дубль с плагином: ' + str(path))
     for source in manifest['preserved']:
         path = HOME_DIR / source['path']
         if not path.is_file():
