@@ -37,7 +37,7 @@ allowed-tools: Bash
 
 ```
 base=$(git merge-base HEAD origin/develop)
-cache=$(platsdk-baseline "$base" | tail -1)
+cache=$(platsdk-baseline "$base")
 ./gradlew :presentation:ui:testDebugUnitTest --tests 'ru.mts.platsdk.ui.screenshot.*'
 gallery-diff "$cache" presentation/ui/build/screenshots --zip /tmp/srez.zip
 ```
