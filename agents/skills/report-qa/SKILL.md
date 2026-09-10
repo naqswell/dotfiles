@@ -98,7 +98,18 @@ apk-send file /tmp/srez.zip "Срез галереи · <ветка> · изме
 а не механизм: «на узких экранах при крупном шрифте текст может не помещаться —
 посмотрите экран X».
 
-Сюда же — экраны, тронутые в коде, но не покрытые матрицей.
+Сюда же — экраны, тронутые в коде, но не покрытые матрицей. Список непокрытых
+вычитай из теста, наизусть не помни:
+
+```
+excused=$(sed -n '/val excused/,/^    )/p' \
+  presentation/ui/src/test/java/ru/mts/platsdk/ui/screenshot/MatrixCoverageTest.kt \
+  | grep -oE '[A-Za-z0-9]+Screen::class' | sed 's/::class//' | sort -u | paste -sd'|' -)
+git diff "$base"..HEAD -- '*.kt' | grep -E '^[+-]' | grep -oE "\b($excused)\b" | sort -u
+```
+
+Ищи по содержимому диффа, а не по именам файлов: экраны объявлены внутри
+`PlatSdkScreen.kt`, и по имени файла их там не видно.
 
 ## Отправка
 
