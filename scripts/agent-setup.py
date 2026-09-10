@@ -97,15 +97,20 @@ def install():
     # рядом показал бы их в списке сессии дважды. Остальные клиенты про плагины
     # не знают, поэтому плоская раскатка в ~/.agents/skills остаётся каноном.
     in_plugin = set()
-    for manifest in (HOME_DIR / '.claude/skills').glob('*/.claude-plugin/plugin.json'):
-        skills = manifest.parent.parent / 'skills'
+    for plugin_json in (HOME_DIR / '.claude/skills').glob('*/.claude-plugin/plugin.json'):
+        skills = plugin_json.parent.parent / 'skills'
         if skills.is_dir():
             in_plugin |= {s.name for s in skills.iterdir() if (s / 'SKILL.md').exists()}
     for path in sorted((KIT / 'skills').iterdir()):
         if (path / 'SKILL.md').exists():
             link(HOME_DIR / '.agents/skills' / path.name, path)
             if path.name in in_plugin:
-                unlink(HOME_DIR / '.claude/skills' / path.name)
+                flat = physical(HOME_DIR / '.claude/skills' / path.name)
+                if flat.exists() and not flat.is_symlink():
+                    print('WARN дубль: ' + str(flat) + ' — настоящий каталог, '
+                          'скилл будет показан дважды. Уберите его руками')
+                else:
+                    unlink(flat)
             else:
                 link(HOME_DIR / '.claude/skills' / path.name, path)
     link(HOME_DIR / '.codex/rules/default.rules', KIT / 'adapters/codex.rules')
@@ -196,14 +201,21 @@ def check():
         if not ok:
             failures.append(dest)
     for base in [HOME_DIR / '.agents/skills', HOME_DIR / '.claude/skills']:
+        if not base.is_dir():
+            failures.append('нет каталога ' + str(base))
+            continue
         for path in base.iterdir():
-            if (path / '.claude-plugin/plugin.json').exists():
+            # Каталог плагина скиллы держит внутри, своего SKILL.md у него нет.
+            # Обычные файлы (.DS_Store и прочий сор) скиллами не притворяются.
+            if not path.is_dir() or (path / '.claude-plugin/plugin.json').exists():
                 continue
             if not (path / 'SKILL.md').exists():
                 failures.append(str(path))
     for source in manifest['preserved']:
         path = HOME_DIR / source['path']
-        if hashlib.sha256(path.read_bytes()).hexdigest() != source['sha256']:
+        if not path.is_file():
+            failures.append('preserved missing: ' + source['path'])
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != source['sha256']:
             failures.append('preserved changed: ' + source['path'])
     print('Skills:', len(list((HOME_DIR / '.agents/skills').glob('*/SKILL.md'))))
     print('Failures:', failures)
