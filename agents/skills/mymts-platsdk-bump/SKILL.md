@@ -99,7 +99,7 @@ git switch -c <type>/<name>
 Для `bugfix` — от релизной ветки:
 ```
 git fetch origin
-git switch -c <type>/<name> origin/release/<X.Y[.Z]>
+git switch -c <type>/<name> --no-track origin/release/<X.Y[.Z]>
 ```
 
 ### 4. Бамп
